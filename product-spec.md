@@ -1,8 +1,8 @@
 # Meal Prep Agent — MVP 產品規格
 
-更新：2026-09-28。狀態：產品方向已確認，營養政策與本機保存已具體化為 v1 規劃；尚未實作。
+更新：2026-09-28。狀態：產品方向已確認，營養政策與 D1 雲端保存已具體化為 v1 規劃；尚未實作。
 
-本文件定義第一版的使用情境、互動、資料契約與驗收。[營養政策 v1](nutrition-policy.md) 定義可實作的公式、產品預設及邊界；Cloudflare 整合仍須依第 10 節驗證，不將文件規劃當成可運行成果。
+本文件定義第一版的使用情境、互動、資料契約與驗收。[營養政策 v1](nutrition-policy.md) 定義公式、產品預設及邊界；[技術架構](architecture.md) 補上模組、提案／D1 條件提交及整合 gates。Cloudflare 整合仍須依第 10 節驗證，不將文件規劃當成可運行成果。
 
 ## 1. 產品定位與已確認方向
 
@@ -13,7 +13,7 @@
 - 自煮備餐為主，允許加入固定早餐與外食餐點；第一版不主動搜尋、推薦店家或下單。
 - 核心能力為設定目標、產生餐單、營養總覽、局部換菜／調份量、備餐與購物清單、條件衝突協商。
 - 對話與餐單卡片操作同一份計畫，支援鎖定、變更預覽與復原。
-- 展示使用明確標示的合成資料，程式與設定獨立；框架方向為 Google ADK TypeScript＋AG-UI。
+- 展示使用明確標示的合成資料，程式與設定獨立；框架採 Next.js＋TypeScript、Python＋FastAPI／PydanticAI 與 AG-UI。
 - 模型只使用免費額度；使用者允許採用 Cloudflare。Workers AI 與具體部署組合列為優先候選，仍須完成第 10 節相容性驗證，不自動啟用付費模型或超額計費。
 
 本稿將首次體驗收斂為單人、連續三天、每天早餐／午餐／晚餐；點心可選填。同一個已確認目標預設套用三天，不加入訓練日與休息日週期化設定。
@@ -96,10 +96,10 @@
 | PlanningConstraints | 日期、需安排餐次、固定餐點、設備、食材排除、硬限制與偏好 | 限制強度由使用者決定 |
 | Food / Recipe | 成分、份量基準、重量／件數單位、生熟狀態、營養、來源、步驟、預估時間 | 缺資料為 null；合成資料與實際資料明確分開 |
 | PlannedMeal | 日期、餐次、自煮／外食、食譜或手動來源快照、份量、鎖定狀態 | 固定外食不生成自煮採買項；鎖定同時涵蓋份量 |
-| PlanRevision | 生效目標、限制、餐點、庫存、購物勾選、衍生總量與清單 | 同一版的卡片、總覽與清單須一致；復原涵蓋整個快照 |
+| PlanRevision | 生效目標、限制、餐點、庫存、購物及料理步驟勾選、來源／計算版本、衍生總量與清單 | 同一版的卡片、總覽與清單須一致；復原涵蓋整個快照 |
 | ChangeProposal | 所依據版本、使用者要求的修改範圍、餐點與衍生差異、衝突 | 過期提案不能覆蓋較新的計畫；須重新計算 |
 | Pantry / ShoppingItem | 食材識別、需要量、已確認庫存量、可相容單位、剩餘採買量 | 同一庫存跨菜只扣一次，不得產生負採買量 |
-| SavedPlan | schemaVersion、planId、遞增 revision、目前及前一份 PlanRevision、updatedAt／expiresAt | 採用與復原須交易提交；不持久化 GoalDraft、聊天或尚未採用提案 |
+| SavedPlan | schemaVersion、planId、遞增 revision、目前及前一份 PlanRevision、updatedAt／expiresAt；歸屬僅由服務端匿名身份決定 | 採用與復原須 D1 條件提交；不持久化 GoalDraft、聊天或尚未採用提案 |
 
 每個營養欄位各自保存數值及來源／完整性；有熱量不代表已有蛋白質。來源至少區分合成資料、使用者輸入、可追溯參考資料。
 
@@ -144,7 +144,7 @@
 | A10 失敗恢復 | 模型或工具失敗有明確狀態與重試入口；免費額度用完時停用新的 AI 操作並說明原因，既有計畫可查看，不自動切換付費服務，不以 fixture 冒充 live 成功 |
 | A11 設備與備餐 | 僅有電鍋的案例不選需要未提供設備的食譜，共用設備不重疊占用，分裝量能對回餐次 |
 | A12 跨入口政策 | 不適用的估算輸入有正確分流，非法手動值也被擋；重新估算不直接改掉已確認目標 |
-| A13 本機保存 | 關頁後同一瀏覽器可恢復已採用計畫與一次復原；不恢復聊天或身體輸入，儲存失敗不冒稱成功 |
+| A13 雲端保存 | 同瀏覽器 Cookie 有效且服務可用時，關頁後恢復已採用計畫與一次復原；不同匿名身份不能讀寫他人計畫；不恢復聊天或問卷，D1 故障不冒稱保存成功 |
 | A14 多分頁與清除 | 同版本的兩次提交只有一次生效；另一頁過期提案被擋；清除或到期後，尚在執行的舊回覆不能恢復已刪計畫 |
 
 驗證分為可重跑的資料／計算測試，以及真實模型的多輪互動驗收。前者通過不能替代後者；本次只定義案例，尚未執行應用測試。
@@ -157,26 +157,24 @@
 |---|---|---|
 | 起始目標估算 | Mifflin–St Jeor 需另選活動係數；DRI 2023 有完整成人活動分級公式；動態模型需要長期追蹤 | 採 DRI 2023 EER 起始估算，減脂 −10%／增肌 +5% 為產品提案預設，另行確認；公式、蛋白質規則與獨立核算見 [營養政策](nutrition-policy.md) |
 | 數值與適用政策 | 自由填寫彈性高；版本化的適用域與驗證可讓兩入口行為一致 | `nutrition-v1` 已列公式／單位、支援範圍、容許差、缺值及 N1–N8 驗收；開放真實輸入前須完成實作驗證 |
-| 計畫保存 | 記憶體最簡單但關頁即失去；本機保存免帳號但限同一瀏覽器；帳號與後端保存支援跨裝置但增加身份與資料管理 | 採本機 IndexedDB 保存已採用計畫與前一版，30 天未修改後到期；原始身體輸入與聊天不持久化。詳細交易及失敗行為見第 10.2 節 |
+| 計畫保存 | 分頁記憶體最簡單但無關頁恢復；D1＋匿名 Cookie 免登入但需雲端可用；登入帳號支援跨裝置但增加管理 | 已確認 D1＋匿名識別 Cookie，保存已採用計畫與前一版、30 天未修改失效；不使用 IndexedDB。見第 10.2 節 |
 | 免費模型 | 本機模型免 API 費但需要常駐硬體；雲端免費額度適合公開展示但有用量限制；付費 API 可擴充但不符合本次預算 | 已確認只用免費模型額度。優先評估 Workers AI；模型及串接方式依第 10.1 節驗證後定案 |
-| UI 與部署 | React＋Vite SPA 適合本版互動頁；SSR 框架支援伺服器渲染但增加 runtime 整合；獨立 Node 後端有較直接的 Node 套件環境，但增加另一個部署服務 | 建議 React＋TypeScript＋Vite，搭配 Workers Static Assets 與 Worker API；保留 ADK TypeScript＋AG-UI。Cloudflare 已獲允許，整套免費部署仍為待驗證候選，不自建 Agent runtime |
+| UI 與部署 | 全 TypeScript 可統一語言；Next.js＋Python API 增加跨語言契約，但能集中 Python 業務規則並沿用參考專案結構 | 已選 Next.js＋FastAPI／PydanticAI＋AG-UI，單一 repo、Modular Monolith；Workers 提供 Web／proxy，Python 另部署。詳細責任與取捨見 [技術架構](architecture.md) |
 
 Mifflin–St Jeor 的 [原研究](https://pubmed.ncbi.nlm.nih.gov/2305711/) 保留作方法比較；v1 使用的公式與來源集中在營養政策，不維護兩套可互相漂移的係數表。
 
 ### 10.1 免費模型與 Cloudflare 候選架構
 
-以下為 2026-09-27 查閱官方文件後的設計建議；尚未安裝、呼叫模型或部署。使用者已確認的是免費模型限制與允許使用 Cloudflare，並非特定模型或 runtime 已通過驗收。
+2026-09-28 已確認採用參考專案的 Web／Python 技術與模組結構；尚未安裝、呼叫模型或部署。詳細選型、公開契約與模組邊界集中於 [技術架構](architecture.md)，此處保留產品限制。
 
-| 元件 | 優先候選與責任 |
+| 元件 | 選型與責任 |
 |---|---|
-| Web | React＋TypeScript＋Vite，靜態頁由 Workers Static Assets 提供；對話與餐單卡片共用狀態，不要求 SSR |
-| Agent API | Cloudflare Worker 執行 ADK TypeScript，透過 AG-UI 傳送互動事件；由 ADK 管理模型與工具迴圈 |
-| 模型 | Workers AI 的 `@cf/qwen/qwen3-30b-a3b-fp8` 作第一個評估候選；透過 ADK `BaseLlm` adapter 轉換訊息、工具呼叫／回傳及串流，不另建 Agent 執行框架 |
-| 計算與資料 | 受控合成食譜及可重跑的營養／份量／購物計算；模型不負責算術或捏造營養。模型只取得完成當次提案所需的已確認目標與條件 |
+| Web | Next.js＋TypeScript；Cloudflare Workers，優先驗證 vinext，必要時再比較 OpenNext |
+| API／Agent | 獨立 Python 主機執行 FastAPI＋PydanticAI；官方 AGUIAdapter 傳送互動事件，Workers 負責匿名身份／D1 保存，並代理固定 Python 上游 |
+| 模型 | Workers AI `@cf/zai-org/glm-4.7-flash` 為免費候選，透過 OpenAI-compatible endpoint 驗證工具、串流及結構化結果 |
+| 計算與資料 | Python 集中餐單／份量／購物計算；身體問卷在瀏覽器估算，後端接收已確認目標。API 與工具共用 use cases |
 
-[Cloudflare React＋Vite 指引](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/) 支援此 Web 組合；[Static Assets 計費文件](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/) 區分免費的靜態資源請求與另計的 Worker 執行。[模型卡](https://developers.cloudflare.com/workers-ai/models/qwen3-30b-a3b-fp8/) 列出 function calling 支援；這不是本產品工具選擇、繁體中文或多輪品質已通過的證據。
-
-[ADK TypeScript](https://github.com/google/adk-js) 提供 web bundle，[BaseLlm](https://adk.dev/api-reference/typescript/classes/BaseLlm.html) 定義內容生成介面；據此提出 adapter 方案。Workers AI 的 [OpenAI-compatible API](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/) 只說明 API 介面相容，不代表 ADK TypeScript 已有可直接使用的完整 connector，或可在 workerd 正常運行。
+依據 [Cloudflare Next.js 指引](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)、[PydanticAI AG-UI 整合](https://pydantic.dev/docs/ai/integrations/ui/ag-ui/)、[模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。官方介面支援不代表本產品已通過品質或部署驗收；Python 主機的費用與資源須另行確認。
 
 免費額度與失敗行為：
 
@@ -185,39 +183,39 @@ Mifflin–St Jeor 的 [原研究](https://pubmed.ncbi.nlm.nih.gov/2305711/) 保�
 - 定義每次執行的輸入／輸出 token、工具迴圈與重試上限，並對公開入口限流；數值以代表案例的實測消耗定案。到上限或供應商回報額度不足即停止，既有計畫仍可查看；需要 AI 的新提案待額度恢復，不自動改用付費服務。
 - fixture 展示與 live 模型模式明確區分。模型不可用時，可由訪客另行選擇合成案例展示，不悄悄以預錄結果冒充成功。
 
-在建立完整功能前，以最小技術驗證確認下列條件，結果回填本節；不另建立待辦主表：
+先以最小技術驗證確認整合可行性，再隨功能完成下列完整條件，結果記入 [技術架構](architecture.md) 第 9 節 K1–K4 並在此連結；不另建立待辦主表：
 
-1. ADK＋模型 adapter 能完成一次「提出工具呼叫 → 執行確定性計算 → 接回工具結果 → 回覆」，並處理串流、取消、錯誤與 AG-UI 事件。
-2. 同一流程在 workerd 及實際 Workers Free 環境可執行，量測 CPU、記憶體與冷啟動；[官方限制](https://developers.cloudflare.com/workers/platform/limits/) 的免費 HTTP 請求 CPU 預算為 10 ms，等待網路不算 CPU。Node 測試或 build 通過不足以替代此驗證。
-3. 用合成資料走 A1、A3、A5、A10，驗證繁體中文、工具參數與營養來源；記錄完整一輪的 token／Neuron 消耗，另外模擬額度耗盡，確認不產生付費 fallback。
+1. Python 封裝、生成 API 契約與兩端數值邊界通過 K1；PydanticAI／Workers AI 工具往返及 AG-UI 串流、取消與錯誤通過 K2。
+2. Next.js 在 workerd／實際 Workers 驗證 Web、SSE proxy 及資源；Python 主機另驗證容量及入口隔離；D1 保存、匿名身份與服務中斷恢復通過 K3。
+3. 合成資料走 A1、A3、A5、A10，各至少三次 live 驗證繁體中文、工具參數與來源，量測 token／Neuron 消耗及模擬耗盡，通過 K4。
 
-若任一條件不符，回到部署或 connector 選型比較；保留免費模型與既定框架限制，不自行升級付費或改用其他 Agent 框架。
+若任一條件不符，回到對應 runtime、provider 或部署選型比較，不自行升級付費。Temporal、PostgreSQL、帳號及跨裝置保存不隨本次技術參考一起納入。
 
 ### 10.2 計畫保存與資料邊界
 
-本版免登入，以同一瀏覽器、同一網站 origin 的一份已採用計畫為範圍。從頭設計的選項為：localStorage 單一快照容易實作，但跨分頁版本檢查與寫入不能組成資料庫交易；IndexedDB 提供非同步交易，可將版本檢查與保存放在一起；雲端帳號保存另需身份與同步。本版選 IndexedDB，理由是既有的復原及過期提案規則。能力依據：[IndexedDB](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)。
+本版採 Cloudflare D1＋匿名識別 Cookie，免登入，同一身份只保留一份已採用計畫及前一版。瀏覽器不使用 IndexedDB／localStorage 保存餐單；Cookie 只保存隨機身份憑證，實際內容放雲端。清除 Cookie 後無法找回舊餐單，不提供跨裝置登入。
 
-保存契約：
+- Worker 負責身份歸屬、CSRF 防護與 D1 讀寫；Python 負責餐單規則。服務端自行讀取 base 並驗證候選，不相信瀏覽器傳來的計算結果或 owner。Cookie 使用 HttpOnly／Secure／SameSite，不能傳給 Python／模型或記 log。
+- D1 保存目前及前一份 PlanRevision、已確認目標、來源快照、庫存與購物／料理勾選；不保存問卷、GoalDraft、聊天或未採用提案。重開需重填問卷才能重新估算。
+- 所有採用、份量、鎖定、勾選及復原都以服務端 revision 條件寫入；current／previous 同列更新。復原建立新 revision 並消耗 previous；重複或舊提案不能覆蓋新狀態。網路中斷後先讀回確認結果，不能盲目重送產生第二次修改。
+- 成功修改才更新 `expiresAt = updatedAt + 30 × 24 小時`；查看不續期。到期立即拒絕讀寫，排程清理過期資料；原始身體輸入繼續只留當次分頁。Cookie 遺失不等於即時刪除雲端資料。
+- 「清除」撤銷目前 run，刪除伺服器匿名 session／餐單並清 Cookie；服務端成功前不顯示已清除。晚到請求不可 upsert 重建舊身份。重新開始取得全新身份。
+- D1 或保存 API 不可用時，已載入快照只供唯讀，採用／勾選／復原失敗保留原狀；重開需服務恢復才能載入。沒有本機保存 fallback。只有模型額度耗盡時，既有計畫讀寫及純計算仍可用。
+- 使用來源快照與政策版本，不因資料庫更新食譜而改舊計畫；未知 schema／損壞資料明確報錯，不靜默改寫。餐單回應 no-store，不共享快取。
 
-- 保存目前 PlanRevision、前一份可復原版本、食譜／固定餐營養與來源快照、已確認庫存、購物勾選及日期；只保留一階復原，不建立歷史帳號或跨裝置同步。
-- 不保存身體問卷、GoalDraft、聊天、未採用提案、模型推理或憑證。目標估算的原始輸入在當次分頁可查看；重開只能看到已確認目標與政策來源，重新估算需重填。
-- 採用提案、改鎖定、購物勾選與復原都在同一 readwrite transaction 內檢查目前 revision 再寫入；復原是以舊內容建立新 revision，不倒退版本號。通知另一分頁更新畫面，交易內版本檢查才是防覆寫依據。
-- `expiresAt = updatedAt + 30 × 24 小時`，只有已提交的修改更新時間，單純查看不續期。到期在下一次開啟／讀取時清除；不聲稱網站關閉時仍能準時從裝置刪除。採用時顯示保存期限及清除入口。
-- 清除同時取消當次請求、清掉目前／復原版本與記憶體對話，並使舊 run 所屬的計畫識別失效；晚到的串流、工具結果及其他分頁不能重新寫回。已送往推論服務的內容不因清除本機而宣稱已從供應商刪除。
-- 儲存拒絕、容量不足或交易失敗時保留原計畫，提案仍可檢視與重試，不顯示「已保存」。完全無法開啟資料庫時可明確選擇僅本次分頁模式；此模式不寫入既有本機計畫，關閉即失去，切換回保存模式須重新核對版本。
-- 讀取時驗證 schemaVersion 與必要欄位，重新計算衍生值；未知版本或損壞資料不悄悄改寫或刪除，先顯示無法恢復及明確清除入口。使用固定來源快照與政策版本，不因更新食譜庫就改掉已採用的目標／菜單。
+詳細 Cookie、CAS、operationId、端點與期限見 [架構第 7 節](architecture.md)。D1 與模型免費額度分開處理，皆不自動升級付費。
 
-本機資料不是雲端備份；瀏覽器清除網站資料、無痕模式結束或容量回收可能使其消失，說明見 [瀏覽器保存政策](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria)。共同裝置上的同一瀏覽器也會看到這份計畫；提供清除，不宣稱本機保存等同加密隔離。
+Agent 每次只接受必要的已確認目標、餐單／條件／待確認提案快照、當次訊息及有長度上限的本分頁對話上下文；不將原始身體表單混入上下文。服務端重新驗證資料與工具參數；PydanticAI run context 限該次 FastAPI 請求，不以服務全域記憶體保存跨使用者對話。應用 log 只記技術狀態與用量，不記訊息或身體欄位。自由聊天會送往模型，介面需與「身體表單只在本機計算」分別說明。
 
-Agent 每次只接受必要的已確認目標、餐單／條件／待確認提案快照、當次訊息及有長度上限的本分頁對話上下文；不將原始身體表單混入上下文。服務端重新驗證資料與工具參數；ADK session 限該次執行，不以 Worker 全域記憶體保存跨使用者對話。應用 log 只記技術狀態與用量，不記訊息或身體欄位。自由聊天會送往模型，介面需與「身體表單只在本機計算」分別說明。
-
-A13／A14 的驗證包含關頁恢復、儲存失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；目前只有契約，尚未跑瀏覽器測試。
+A13／A14 的驗證包含關頁恢復、匿名身份隔離、D1 寫入失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；目前只有契約，尚未跑瀏覽器測試。
 
 ## 11. 建議實作順序
 
-1. 依本規格與營養政策具體化 schema，先驗證第 10.1 節的免費模型／Cloudflare 組合；讓兩種入口產生同一種已確認目標，建立 N1–N8 及 A1–A4、A8、A12 的合成資料案例。
-2. 建立餐單與計算核心：先驗證份量、營養、庫存、鎖定、提案與復原的一致性，覆蓋 A5–A9、A11。
-3. 接上 ADK TypeScript＋AG-UI 與 Web 介面：對話及卡片操作同一份狀態，接上 IndexedDB 保存，驗證 A10、A13、A14 與多輪修改。
+以下保留相依概覽；細項遵循 [TDD 實作計畫](implementation-plan.md) 的 RED → GREEN → REFACTOR 及 T00–T12，先跑最小整合再逐步完成完整 gates。
+
+1. 依本規格與營養政策建立 Pydantic／OpenAPI 契約及生成 TS client，先驗證第 10.1 節的免費模型／Cloudflare 組合；讓兩種入口產生同一種已確認目標，建立 N1–N8 及 A1–A4、A8、A12 的合成資料案例。
+2. 建立 Python 餐單計算核心與瀏覽器身體估算：先驗證份量、營養、庫存、鎖定、提案與復原的一致性，覆蓋 A5–A9、A11。
+3. 接上 FastAPI／PydanticAI＋AG-UI 與 Next.js 介面：對話及卡片操作同一份狀態，接上 D1＋匿名 Cookie 保存，驗證 A10、A13、A14 與多輪修改。
 4. 以兩種入口各走完完整展示；真模型驗收與合成資料驗證分別留下結果，再檢查部署與公開展示條件。
 
 實作前依第 10 節定案內容更新本規格。這是建議相依順序，不代表功能、真模型驗收或部署已完成。
