@@ -1,5 +1,6 @@
 """Opt-in synthetic transport probe; never mounted by the product app."""
 
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -15,7 +16,10 @@ from meal_prep.bootstrap.app import create_app
 
 
 def create_probe_app(
-    model: Model, cancellation_token: CancellationToken | None = None
+    model: Model,
+    cancellation_token: CancellationToken | None = None,
+    *,
+    tool_delay: float = 0,
 ) -> FastAPI:
     app = create_app()
     agent = Agent(
@@ -24,8 +28,10 @@ def create_probe_app(
     )
 
     @agent.tool_plain
-    def transport_probe() -> dict[str, bool]:
+    async def transport_probe() -> dict[str, bool]:
         """Return synthetic transport evidence, not an adoptable proposal."""
+        if tool_delay:
+            await asyncio.sleep(tool_delay)
         return {"synthetic": True, "adoptable": False}
 
     @app.post("/agent")
@@ -64,7 +70,7 @@ def create_synthetic_probe_app() -> FastAPI:
     """Explicit local test server; never a live model fallback."""
     from pydantic_ai.models.test import TestModel
 
-    return create_probe_app(TestModel(call_tools=["transport_probe"]))
+    return create_probe_app(TestModel(call_tools=["transport_probe"]), tool_delay=1)
 
 
 def create_live_probe_app() -> FastAPI:

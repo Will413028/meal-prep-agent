@@ -1,6 +1,6 @@
 # Meal Prep Agent — TDD 實作計畫
 
-更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 整合驗證中。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
+更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 最小整合已驗收。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
 
 ## 1. 前提與接續方式
 
@@ -43,7 +43,7 @@
 | T00 | 無 | 可執行測試環境、封裝、基本 CI | 已驗收（本機）：封裝／測試／build；CI 定義已建立，遠端執行於 T12 核對 |
 | T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 部分 GREEN：目標 API／生成契約；Worker DTO、日期與餐單比較待補 |
 | T02 | T01 | 本機身體估算及確認邊界 | 部分 GREEN：八列估算／表單／確認；本機 metadata／鄰級比較已補，保存契約與全路徑隱私 gate 待補 |
-| T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 進行中：官方 adapter／workerd SSE／本地 D1 GREEN；live 工具往返 GREEN；UI run token、斷線待驗 |
+| T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 已驗收（最小整合）：官方 HttpAgent／adapter、run token／取消、workerd SSE／中止、本地 D1 與一次 live；完整 K2/K3 留 T09/T11 |
 | T04 | T01、T03 可行性 | 食譜資料與營養計算 | 未開始 |
 | T05 | T04 | 三天提案、局部修改及硬限制 | 未開始 |
 | T06 | T05 | 購物、庫存與備餐衍生資料 | 未開始 |
@@ -225,3 +225,14 @@
 - 獨立 design-review 發現表單重複意圖調整計算（1 項，採「改」）；已將 adjustedKcal 收回 estimator，表單只讀結果。新增 assertion 1 failed → 58 passed（`pnpm test:web`，`.artifacts/adjusted-energy-{red,green}.log`），八列 golden 包含獨立未取整期望值，複查確認原發現已解決。
 
 - 最終增量 gate：`pnpm typecheck`、`pnpm --filter @meal-prep/web build:vinext`、`MEAL_TEST_WORKER=1 pnpm test:e2e` 通過，workerd 6 passed（`.artifacts/goals-worker-{build,e2e}.log`）。Node 6 passed 在 estimator 搬回單一計算來源前完成；該 refactor 後再跑單元／typecheck／workerd。沒有重跑未變更的 Python domain 或假稱遠端 CI 通過。
+
+### 2026-09-28 T03 串流 consumer 與取消驗收
+
+- `run-state.test.ts`：裸 RUN_FINISHED、缺 outcome、晚到事件、取消／錯誤、runId 不一致 6 failed → GREEN（`pnpm test:web`，`.artifacts/run-state-{red,green}.log`）。移除 outcome／取消守門均被 mutation 抓到，已還原（`.artifacts/run-state-mutation-{outcome,cancel}.log`）。
+- 瀏覽器 consumer 先缺按鈕與結果 assertion 2 failed → GREEN（`.artifacts/probe-ui-{red,green}.log`），取消與重試透過 barrier 控制晚到回覆；沒有以 sleep 猜測 UI 完成。
+- 設計審查 1 項「改」：最初自製 SSE reader 偏離架構 HttpAgent，已移除，改用固定 `@ag-ui/client` 1.0.0，保留應用層 run token／outcome reducer；複查 NO DESIGN FINDINGS。最終官方 client 的任意 UTF-8 byte 分段、fetch AbortSignal 測試通過；先前 custom reader 的 3 個測試不再列最終測試數。
+- Provider 清理屬既有框架行為，記回歸驗證而非首次 RED：`uv run --project backend --frozen pytest backend/tests/test_agent_disconnect.py -q` 以獨立 ephemeral TCP server 發送真 SSE，收到首段後關連線，provider iterator finally 在 3 秒內觸發，server 可停止（`.artifacts/tcp-disconnect-regression.log`）。
+- workerd 真瀏覽器中止：收到 RUN_STARTED、尚未 proposal_ready 即 AbortController.abort，reader 回 AbortError；Wrangler 印出技術訊息 `Network connection lost`，取消後可進行下一次正常 run。沒有以此宣稱部署端清理已驗收，部署仍由 T11 驗證。synthetic probe 的工具刻意延後 1 秒供取消觀察；live 無此延遲。
+- 最終 gate：Python 45 passed（`.artifacts/t03-python.log`）、Vitest 66 passed（`.artifacts/http-agent-web-final.log`）、typecheck／ruff／mypy 通過，vinext build 後 workerd Playwright 10 passed（`.artifacts/http-agent-worker-{build,e2e}.log`）。Node 10 passed 在測試 bare-finish fixture 補齊 RUN_STARTED 前完成；正式 fixture 補齊後於 workerd 重驗。
+- 相容性邊界：HttpAgent 1.0.0 對 CRLF fixture 解析失敗（`.artifacts/http-agent-web.log`）；目前固定官方 AGUIAdapter 實際輸出 LF，proxy 原樣轉送，最終驗證使用同一 LF 協定。未宣稱一般 SSE CRLF 相容；更換 producer／換行格式前必須先補其相容性驗證，不以自製 parser 繞過官方 client。
+- 此 T03 只證明最小整合；正式餐單 tools／多輪狀態及 live 品質仍屬 T09/T12，保存身份／CAS 仍屬 T07。

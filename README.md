@@ -4,7 +4,7 @@
 
 ## 目前狀態
 
-已確認 MVP 產品方向、只用免費模型額度，並允許使用 Cloudflare。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 比較選型、定義模組／資料流及整合驗證。已依參考專案選定 Next.js＋FastAPI／PydanticAI；部署組合仍須實測。目前已有可執行 Web／Python 骨架、目標驗證 API、生成契約與本機估算表單；T00–T02 的部分案例已完成 RED／GREEN，T03 正在驗證官方 AG-UI 與 workerd。尚未完成配餐、D1 保存或部署，完整 gates 尚未驗收。
+已確認 MVP 產品方向、只用免費模型額度，並允許使用 Cloudflare。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 比較選型、定義模組／資料流及整合驗證。已依參考專案選定 Next.js＋FastAPI／PydanticAI；部署組合仍須實測。目前已有可執行 Web／Python 骨架、目標驗證 API、生成契約與本機估算表單；T00–T02 的部分案例已完成 RED／GREEN，T03 已驗證官方 HttpAgent／AGUIAdapter、run token／取消與 workerd 最小整合。尚未完成配餐、D1 保存或部署，完整 gates 尚未驗收。
 
 ## MVP 範圍
 
@@ -52,6 +52,6 @@ uv run --project backend --frozen ruff check --config backend/pyproject.toml bac
 
 Cloudflare 本機驗證：`pnpm --filter @meal-prep/web build:vinext`，接著 `MEAL_TEST_WORKER=1 pnpm test:e2e`；同一組瀏覽器案例改跑 workerd。`pnpm --filter @meal-prep/web test:d1` 只測 ephemeral 本地 D1 binding，不建立雲端資料庫。
 
-T03 的 `/api/agent` 只轉送固定 Python `/agent`。瀏覽器測試啟動明確的 `create_synthetic_probe_app`；正式 `create_app` 不掛 Agent probe。真模型測試另以 `meal_prep.bootstrap.probe:create_live_probe_app` 啟動，需在後端環境設定 `CLOUDFLARE_ACCOUNT_ID` 與 `CLOUDFLARE_API_TOKEN`，固定 Cloudflare GLM-4.7-flash，無付費或 synthetic fallback；已成功執行一次 live 工具往返；尚未部署，也未完成模型品質 gate。
+T03 瀏覽器使用固定 `@ag-ui/client` 1.0.0 的 HttpAgent；合成連線測試不產生可採用餐單。`/api/agent` 只轉送固定 Python `/agent`。瀏覽器測試啟動明確的 `create_synthetic_probe_app`；正式 `create_app` 不掛 Agent probe。真模型測試另以 `meal_prep.bootstrap.probe:create_live_probe_app` 啟動，需在後端環境設定 `CLOUDFLARE_ACCOUNT_ID` 與 `CLOUDFLARE_API_TOKEN`，固定 Cloudflare GLM-4.7-flash，無付費或 synthetic fallback；已成功執行一次 live 工具往返；尚未部署，也未完成模型品質 gate。
 
 契約 validator 在生成階段預編譯，Worker 不執行 Ajv 動態編譯。雙 runtime 切換後 `typecheck` 會先 `next typegen` 更新生成型別。開發前請讀 [AGENTS.md](AGENTS.md)。
