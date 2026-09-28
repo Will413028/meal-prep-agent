@@ -10,7 +10,7 @@ export type EstimateInput = {
   intent: "maintain" | "lose" | "gain";
   training: boolean; pregnantOrLactating: boolean; needsProfessional: boolean;
 };
-export type EstimateResult = { status: "ready"; eer: number; kcal: number; protein: number; policyVersion: "nutrition-v1" } | { status: "needs_input" | "unsupported"; reason: string };
+export type EstimateResult = { status: "ready"; eer: number; adjustedKcal: number; kcal: number; protein: number; policyVersion: "nutrition-v1" } | { status: "needs_input" | "unsupported"; reason: string };
 export function estimateGoal(partial: Partial<EstimateInput>): EstimateResult {
   const required: (keyof EstimateInput)[] = ["age", "heightCm", "weightKg", "classification", "activity", "intent", "training", "pregnantOrLactating", "needsProfessional"];
   if (required.some((key) => partial[key] === undefined || partial[key] === null)) {
@@ -31,10 +31,11 @@ export function estimateGoal(partial: Partial<EstimateInput>): EstimateResult {
   }
   const [c, a, h, w] = policy.coefficients[input.classification][input.activity];
   const eer = new D(c).plus(new D(a).times(input.age)).plus(new D(h).times(input.heightCm)).plus(new D(w).times(input.weightKg));
-  const kcal = eer.times(policy.intentFactors[input.intent]).div(10).toDecimalPlaces(0).times(10);
+  const adjustedKcal = eer.times(policy.intentFactors[input.intent]);
+  const kcal = adjustedKcal.div(10).toDecimalPlaces(0).times(10);
   const protein = new D(input.weightKg).times(input.training ? policy.proteinFactors.training : policy.proteinFactors.general).ceil();
   if (kcal.lt(1200) || kcal.gt(5000) || protein.lt(30) || protein.gt(250)) {
     return { status: "unsupported", reason: "估算目標超出本版支援範圍，不會自動調整到上下限。" };
   }
-  return { status: "ready", eer: eer.toNumber(), kcal: kcal.toNumber(), protein: protein.toNumber(), policyVersion: "nutrition-v1" };
+  return { status: "ready", eer: eer.toNumber(), adjustedKcal: adjustedKcal.toNumber(), kcal: kcal.toNumber(), protein: protein.toNumber(), policyVersion: "nutrition-v1" };
 }

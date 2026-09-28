@@ -42,7 +42,7 @@
 |---|---|---|---|
 | T00 | 無 | 可執行測試環境、封裝、基本 CI | 已驗收（本機）：封裝／測試／build；CI 定義已建立，遠端執行於 T12 核對 |
 | T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 部分 GREEN：目標 API／生成契約；Worker DTO、日期與餐單比較待補 |
-| T02 | T01 | 本機身體估算及確認邊界 | 部分 GREEN：八列估算／表單／確認；完整 metadata、鄰級比較與隱私 gate 待補 |
+| T02 | T01 | 本機身體估算及確認邊界 | 部分 GREEN：八列估算／表單／確認；本機 metadata／鄰級比較已補，保存契約與全路徑隱私 gate 待補 |
 | T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 進行中：官方 adapter／workerd SSE／本地 D1 GREEN；live 工具往返 GREEN；UI run token、斷線待驗 |
 | T04 | T01、T03 可行性 | 食譜資料與營養計算 | 未開始 |
 | T05 | T04 | 三天提案、局部修改及硬限制 | 未開始 |
@@ -189,7 +189,7 @@
 
 每一已驗收項需能對回可重跑命令；若 RED 不是預期原因，修測試環境或資料後重新確認，不能照抄本計畫的預期文字充當證據。純文件檢查不列入應用 RED／GREEN。
 
-### 2026-09-28 執行紀錄（未提交）
+### 2026-09-28 基礎切片執行紀錄（commit 4e53bd8）
 
 - T00：`test_health.py` 先 404 assertion RED，加入 `/health` 後 GREEN；fixture 標示在 Vitest／Playwright 都先缺元素 RED，再 GREEN。故意改錯 health 回應會失敗，已還原。wheel 在 `.artifacts/wheel-env` 安裝後由 `/tmp` 以 `python -I` import 成功。JUnit guard 的 zero／all-skipped／failure 反例均被拒絕。
 - T01：目標 API 的有效輸入先 404 RED；邊界循環 21 failed → 23 passed，區間／能量衝突循環 5 failed → 37 passed。獨立 review 找到原始 JSON number 經 float 提早取整，以及回應版本未列 required；各加 2 個 RED 後修正。現在 API 保留 Decimal lexeme 到驗證，生成 schema 要求回應版本。
@@ -205,7 +205,7 @@
 - T03 workerd 瀏覽器：四個既有案例通過；新增 SSE 案例先 `/api/agent` 404 → 加固定串流 route → 5 passed（`.artifacts/sse-green.log`）。官方 adapter 完成 synthetic tool 往返，outcome 綁 runId 且明確不可採用。此案例驗事件傳輸，尚不等於 UI run token／真斷線及完整 K2。
 - 本地 D1：`pnpm --filter @meal-prep/web test:d1` 通過 ephemeral binding 的 prepared write／read／missing-row smoke；使用 Miniflare 5 原生 config。沒有正式保存 schema、CAS 或雲端 D1。
 - Mutation：TS 型別產物與 standalone validator 各自加入漂移，生成 gate 均拒絕；成人門檻 19 改 18，38 個 estimator 案例中對應 1 個失敗；已精確還原，見 `.artifacts/mutation-{0,1,2}.log`。不把 mutation 當首次 RED。
-- 獨立設計審查涵蓋契約生成／proxy／取消／probe factories／Cloudflare 接線，兩輪皆無設計發現。先前 correctness review 的兩個契約問題已修正；未提交或推送。
+- 獨立設計審查涵蓋契約生成／proxy／取消／probe factories／Cloudflare 接線，兩輪皆無設計發現。先前 correctness review 的兩個契約問題已修正；基礎切片已提交 4e53bd8，未推送。
 - Cloudflare OAuth 登入狀態已由 Wrangler 確認；live factory 所需專案 API 環境變數未設定，Will 隨後提供指定 Cloudflare 設定，account token 驗證 active；以該 token 完成一次 GLM live 工具往返。登入／下載已授權，不再重問。遠端 CI、部署、正式 D1 保存與 T04–T12 仍未完成。
 
 - Live：2026-09-28，固定 `@cf/zai-org/glm-4.7-flash` 完成官方 adapter 的 tool call／result／proposal_ready／RUN_FINISHED，HTTP 200，9.71 秒，無 RUN_ERROR；`.artifacts/live-probe.log` 僅保存事件類型與合成 outcome，不記憑證。一次 transport probe 不等於 K4 品質／用量驗收；未量 Neuron。token 依使用者指定來源沿用，未另建 token。
@@ -214,3 +214,14 @@
 ### 全計畫持續執行
 
 使用者已指定完成本計畫全部 T00–T12 為目標，並授權每階段必要驗證通過後直接 commit；不因已有部分 GREEN 即結束整體目標。基礎切片先提交，後續 commit 依各階段完成範圍命名，外部 gates 仍需真實證據。
+
+### 2026-09-28 目標輸入與確認增量
+
+- 手動數值先以原始十進位文字檢查精度，再轉 JSON number；支援 `下限..上限`、選填 carbs/fat，空白與 0 分開。`pnpm test:web`：parser 8 failed → GREEN，`.artifacts/target-parser-{red,green}.log`；瀏覽器先無區間輸入 RED → 6 passed，`.artifacts/manual-ranges-{red,green}.log`。
+- `goal-state.test.ts`：來源／UTC 確認時間／快照隔離 3 failed → GREEN，`.artifacts/goal-metadata-{red,green}.log`。本機 ConfirmedGoal 保留允許欄位；GoalDraft 的原始身體輸入、EER、意圖調整值不進確認快照。此型別仍是 UI 狀態，公開保存 DTO 於 T01/T07 同源生成，不宣稱已有保存 API。
+- `pnpm test:e2e`：來源及原始估算顯示 2 failed → 6 passed；活動不確定先比較、無 API payload／無確認卡，1 assertion failed → 6 passed，`.artifacts/goal-metadata-ui-{red,green}.log` 與 `activity-ui-{red,green}.log`。兩次 locator strict-mode 衝突已縮小為 goal region／combobox，不放寬業務 assertion。
+- 本次 `pnpm test:web` 57 passed（`.artifacts/goals-final-web.log`），`pnpm typecheck` 通過（`.artifacts/goals-final-types.log`）；尚未將 T02 全部 gate 標完成。
+
+- 獨立 design-review 發現表單重複意圖調整計算（1 項，採「改」）；已將 adjustedKcal 收回 estimator，表單只讀結果。新增 assertion 1 failed → 58 passed（`pnpm test:web`，`.artifacts/adjusted-energy-{red,green}.log`），八列 golden 包含獨立未取整期望值，複查確認原發現已解決。
+
+- 最終增量 gate：`pnpm typecheck`、`pnpm --filter @meal-prep/web build:vinext`、`MEAL_TEST_WORKER=1 pnpm test:e2e` 通過，workerd 6 passed（`.artifacts/goals-worker-{build,e2e}.log`）。Node 6 passed 在 estimator 搬回單一計算來源前完成；該 refactor 後再跑單元／typecheck／workerd。沒有重跑未變更的 Python domain 或假稱遠端 CI 通過。

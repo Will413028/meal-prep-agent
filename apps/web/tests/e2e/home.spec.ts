@@ -1,5 +1,22 @@
 import { expect, test } from "@playwright/test";
 
+test("manual ranges and optional macros are visible and validated without rounding", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByLabel("每日熱量（kcal）")).toHaveAttribute("type", "text");
+  await page.getByLabel("每日熱量（kcal）").fill("1900..2100");
+  await page.getByLabel("每日蛋白質（g）").fill("100..110");
+  await page.getByLabel("每日碳水（g，選填）").fill("0");
+  await page.getByRole("button", { name: "檢查目標" }).click();
+  await expect(page.getByRole("region", { name: "目標預覽" })).toContainText("碳水 0–0");
+  await page.getByRole("button", { name: "確認使用此目標" }).click();
+  await expect(page.getByTestId("confirmed-goal")).toContainText("1900–2100 kcal");
+  await page.getByLabel("每日熱量（kcal）").fill("5000.00000000000001");
+  await page.getByRole("button", { name: "檢查目標" }).click();
+  await expect(page.getByRole("region", { name: "目標設定", exact: true }).getByRole("alert")).toContainText("數值");
+  await expect(page.getByRole("region", { name: "目標預覽" })).toHaveCount(0);
+  await expect(page.getByTestId("confirmed-goal")).toContainText("1900–2100 kcal");
+});
+
 test("visitors see that this is synthetic demonstration data", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Meal Prep Agent" })).toBeVisible();
@@ -18,6 +35,7 @@ test("manual goal requires explicit confirmation and a new draft preserves it", 
   await expect(page.getByTestId("confirmed-goal")).toHaveCount(0);
   await page.getByRole("button", { name: "確認使用此目標" }).click();
   await expect(page.getByTestId("confirmed-goal")).toContainText("2000 kcal");
+  await expect(page.getByTestId("confirmed-goal")).toContainText("來源：手動");
   await page.getByLabel("每日熱量（kcal）").fill("2200");
   await page.getByRole("button", { name: "檢查目標" }).click();
   await expect(page.getByTestId("confirmed-goal")).toContainText("2000 kcal");
@@ -36,16 +54,28 @@ test("guided estimation keeps the body questionnaire out of API payloads and sto
   await page.getByLabel("身高（cm）").fill("170");
   await page.getByLabel("體重（kg）").fill("70");
   await page.getByLabel("公式分類").selectOption("male");
-  await page.getByLabel("活動分級").selectOption("inactive");
+  await page.getByRole("combobox", { name: "活動分級" }).selectOption("inactive");
   await page.getByLabel("飲食目標").selectOption("maintain");
   await page.getByLabel("規律訓練").selectOption("false");
   await page.getByLabel("孕期或哺乳期").selectOption("false");
   await page.getByLabel("需要專業調整飲食").selectOption("false");
+  await page.getByRole("combobox", { name: "活動分級" }).selectOption("unsure");
+  await page.getByRole("button", { name: "在本機估算" }).click();
+  await expect(page.getByRole("region", { name: "活動分級比較" })).toContainText("2520 kcal");
+  await expect(page.getByRole("region", { name: "活動分級比較" })).toContainText("2710 kcal");
+  await expect(page.getByRole("button", { name: "確認使用此目標" })).toHaveCount(0);
+  expect(payloads).toEqual([]);
+  await page.getByRole("combobox", { name: "活動分級" }).selectOption("inactive");
   await page.getByRole("button", { name: "在本機估算" }).click();
   await expect(page.getByRole("button", { name: "確認使用此目標" })).toBeVisible();
   expect(payloads).toEqual([{ schemaVersion: 1, kcal: 2520, protein: 56 }]);
   expect(await page.evaluate(() => ({ local: localStorage.length, session: sessionStorage.length }))).toEqual({ local: 0, session: 0 });
   await expect(page.getByTestId("confirmed-goal")).toHaveCount(0);
+  await page.getByLabel("每日熱量（kcal）").fill("2500");
+  await page.getByRole("button", { name: "檢查目標" }).click();
+  await expect(page.getByRole("region", { name: "目標預覽" })).toContainText("原始估算：2520 kcal");
+  await page.getByRole("button", { name: "確認使用此目標" }).click();
+  await expect(page.getByTestId("confirmed-goal")).toContainText("來源：使用者調整估算");
   await page.reload();
   await page.getByRole("button", { name: "幫我設定目標" }).click();
   await expect(page.getByLabel("年齡（歲）")).toHaveValue("");
