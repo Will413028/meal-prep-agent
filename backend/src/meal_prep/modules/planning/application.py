@@ -166,12 +166,6 @@ def evaluate(
         if meal.day not in dates or key in seen:
             raise ValueError("meal outside dates or duplicate slot")
         seen.add(key)
-        if (
-            meal.slot not in canonical.constraints.slots
-            and not meal.locked
-            and meal.kind != "external"
-        ):
-            raise ValueError("meal outside requested slots")
         if meal.kind == "recipe":
             recipe = catalog.get(meal.recipeId or "")
             if recipe is None:

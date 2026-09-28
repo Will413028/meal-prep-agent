@@ -47,7 +47,7 @@
 | T04 | T01、T03 可行性 | 食譜資料與營養計算 | 已驗收：受控合成資料、份量／來源、Decimal 小計／完整性與三種 mutation |
 | T05 | T04 | 三天提案、局部修改及硬限制 | 已驗收：有限搜尋／canonical API、scope／鎖定／來源、真 HTTP 跨語言契約 |
 | T06 | T05 | 購物、庫存與備餐衍生資料 | 已驗收：庫存單次扣抵、勾選／衍生diff、設備序列與分裝、HTTP完整快照 |
-| T07 | T01、T05、T06 | D1／匿名身份、原子採用與清除 | 未開始 |
+| T07 | T01、T05、T06 | D1／匿名身份、原子採用與清除 | 本地驗收完成；部署案例由 T11 驗 |
 | T08 | T02、T07 | 雙入口與手動操作完整切片 | 未開始 |
 | T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 未開始 |
 | T10 | T09 | 多分頁、隱私與限額故障測試 | 未開始 |
@@ -276,3 +276,17 @@
 - workerd 回歸曾1 failed／9 passed，probe按鈕點擊後仍是初始狀態；原案例單項重跑3次通過，不能宣稱已定位。另以延遲JavaScript的barrier獨立重現 hydration前按鈕可點（expected disabled/received enabled）；新增ready門檻，僅hydration後啟用（`.artifacts/t06-hydration-red.log`）。不以增加timeout隱藏失敗。
 
 - 最終驗證：`uv run --project backend --frozen pytest backend/tests -q` 109 passed（`.artifacts/t06-python-final.log`）；`pnpm test:web` 66 passed；`pnpm test:contracts` Python producer 2＋TS wire 2 passed，contracts:check／ruff／mypy／typecheck 通過。Next build、vinext build 通過，`MEAL_TEST_WORKER=1 pnpm test:e2e` 11 passed（`.artifacts/t06-worker-e2e-final.log`），包含新增 hydration barrier。獨立複查確認 evaluate 契約 consumer 全部同步。尚無保存或完整操作 UI，不將 T06 純計算驗收等同 T07/T08。
+
+
+### T07 本地保存與身份驗收（2026-09-28）
+
+- 前提仍為 Cloudflare D1／匿名 Cookie、單列快照、Python canonical 驗證、無瀏覽器持久化。首次 migration 新增 `plan_sessions`；`git ls-tree -r --name-only 3fc9e50 deploy` 無輸出，沒有舊產品 schema。相容 fixture 使用 T03 的 probe table，測試保留原資料並可讀寫新 session；回退應用保留新增表，正式部署回退由 T11 驗。
+- `pnpm test:web`：session 初始化／歸屬 2 RED → 68 GREEN（`t07-session-{red,green}.log`）；CAS 2 RED → 71 GREEN（`t07-cas-{red,green}.log`）；HTTP Cookie／Origin 2 RED → 73 GREEN（`t07-http-{red,green}.log`）；CSRF／清除故障 1 RED → 75 GREEN；adopt／操作識別 1 RED → 76 GREEN；checks／undo 1 RED → 78 GREEN；locks／portion 1 RED → 79 GREEN。以上 artifact 均在 `.artifacts/`。D1 由 Miniflare 真 binding 執行，沒有以純 SQLite 或成功 mock 取代 CAS。
+- 公開 Worker routes：明確建 session、讀取、adopt／portion／locks／checks／undo 與清除；256-bit token 僅在 HttpOnly Secure Host Cookie，D1 存 hash。Python 收服務端讀取的 base，不收 Cookie／owner；單列 prepared UPDATE 核對 owner、generation、planId、revision、schema、expiresAt，只有一列修改才成功。GET／no-op／同 operationId 重試不續期；成功內容修改續 30 天；每日排程清理，讀寫不依賴排程才拒絕到期。
+- 實際 route RED：`MEAL_TEST_WORKER=1 pnpm --filter @meal-prep/web test:e2e persistence.spec.ts` 預期 201 得 404（`t07-routes-red.log`）；接 custom Worker entry／migration／固定 Python validator 後 GREEN。前置 JSON import／ESM require 環境錯誤不算業務 RED。瀏覽器驗證使用真 Python application、workerd 與本地 D1：兩 contexts 隔離、HttpOnly Cookie、重開讀回、同頁面身份的兩頁 barrier 競爭只有 200＋409、復原與舊提案、commit 後網路中斷仍可讀回 operationId。
+- 固定早餐解除鎖定：產品 §3 的 requested slots 限定 Agent 安排範圍，不排斥使用者既有餐點；移除 evaluate 中會誤拒解鎖早餐的 guard，保留日期／recipe slot／scope／hard constraints。`t07-unlock-fixed-red.log` 真 RED，全部 Python 110 GREEN（`t07-python-final.log`）。
+- Worker 原始 JSON number 在送 Python 前不可靜默捨入：極小 baseRevision 被 JS 轉 0 曾錯誤成功，`t07-precision-red.log` 1 RED → 80 GREEN。以原始 numeric lexeme／Decimal 比對拒絕精度損失，瀏覽器另驗 schemaVersion 高精度冒充 1 被拒；正常 number round-trip 仍通過。
+- PlanRepository 僅使用同源 fetch 與記憶體，回應中斷先讀回核對 planId／generation／revision／operationId，不盲重送。`t07-client-red.log` 3 RED → 83 GREEN；explicit initialize／clear 1 RED → 84 GREEN。未知 schema 不刪資料；最後 UPDATE 故障不改 row／不回續期 Cookie；計算途中到期拒絕。
+- Mutation（不是首次 RED）：暫移除 CAS owner／revision／expiresAt predicate，分別 1／3／2 failed，其餘 15／13／14 passed（`t07-mutation-{owner,revision,expiry}.log`）；還原後回歸綠。
+- design-review：1 改、0 記、0 提、0 駁回。移除 Ajv 內部 helper mutation，以固定 esbuild 於生成階段 bundle standalone ESM；官方依據為 [Ajv standalone runtime requirements](https://ajv.js.org/standalone.html#requirement-at-runtime)。獨立複查確認解決。correctness review：2 改，no-op 在 Python await 後也須重查身份／期限／revision；DELETE 回應中斷須確認 absence，讀失敗或現存 session 不宣稱已清除。`t07-review-red.log` 2 failed／87 passed → `t07-review-green.log` 89 passed，獨立複查無新增實質問題。
+- 最終命令：`pnpm test:web` 89 passed；`uv run --project backend --frozen pytest backend/tests -q` 110 passed；`pnpm contracts:check`、`pnpm test:contracts`（Python 2＋TS 2）、`pnpm typecheck`、ruff check／format、backend mypy、Next build、vinext build 通過。`MEAL_TEST_WORKER=1 pnpm test:e2e` 12 passed（`t07-worker-e2e-final.log`）；本地通過不代表部署 D1／K3 或完整 UI 完成。T08 接操作畫面，T11 驗正式 D1／Python 隔離與回退。

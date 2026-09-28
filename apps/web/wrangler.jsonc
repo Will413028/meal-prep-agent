@@ -5,7 +5,14 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "main": "vinext/server/fetch-handler",
+  "main": "src/worker.ts",
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "meal-prep-local",
+    "database_id": "00000000-0000-0000-0000-000000000007",
+    "migrations_dir": "../../deploy/migrations"
+  }],
+  "triggers": { "crons": ["17 3 * * *"] },
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",

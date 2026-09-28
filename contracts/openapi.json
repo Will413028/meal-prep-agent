@@ -1,6 +1,41 @@
 {
   "components": {
     "schemas": {
+      "AdoptAction": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate": {
+            "$ref": "#/components/schemas/PlanCandidate-Input"
+          },
+          "runId": {
+            "format": "uuid",
+            "title": "Runid",
+            "type": "string"
+          },
+          "scope": {
+            "items": {
+              "$ref": "#/components/schemas/MealKey"
+            },
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Scope",
+            "type": "array"
+          },
+          "type": {
+            "const": "adopt",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "candidate",
+          "scope",
+          "runId"
+        ],
+        "title": "AdoptAction",
+        "type": "object"
+      },
       "BuildProposalRequest": {
         "additionalProperties": false,
         "properties": {
@@ -198,6 +233,56 @@
           "violations"
         ],
         "title": "CanonicalProposal",
+        "type": "object"
+      },
+      "ChecksAction": {
+        "additionalProperties": false,
+        "properties": {
+          "checked": {
+            "title": "Checked",
+            "type": "boolean"
+          },
+          "collection": {
+            "enum": [
+              "shopping",
+              "prep"
+            ],
+            "title": "Collection",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "type": {
+            "const": "checks",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "collection",
+          "id",
+          "checked"
+        ],
+        "title": "ChecksAction",
+        "type": "object"
+      },
+      "ClearedSession": {
+        "additionalProperties": false,
+        "properties": {
+          "cleared": {
+            "const": true,
+            "title": "Cleared",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cleared"
+        ],
+        "title": "ClearedSession",
         "type": "object"
       },
       "ConfirmedGoal-Input": {
@@ -833,6 +918,43 @@
         "title": "InputRange",
         "type": "object"
       },
+      "LocksAction": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "locked": {
+            "title": "Locked",
+            "type": "boolean"
+          },
+          "slot": {
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ],
+            "title": "Slot",
+            "type": "string"
+          },
+          "type": {
+            "const": "locks",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "slot",
+          "type",
+          "locked"
+        ],
+        "title": "LocksAction",
+        "type": "object"
+      },
       "MealDiff": {
         "additionalProperties": false,
         "properties": {
@@ -1037,6 +1159,77 @@
           "confirmed"
         ],
         "title": "PantryItem",
+        "type": "object"
+      },
+      "PlanActionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "discriminator": {
+              "mapping": {
+                "adopt": "#/components/schemas/AdoptAction",
+                "checks": "#/components/schemas/ChecksAction",
+                "locks": "#/components/schemas/LocksAction",
+                "portion": "#/components/schemas/PortionAction",
+                "undo": "#/components/schemas/UndoAction"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AdoptAction"
+              },
+              {
+                "$ref": "#/components/schemas/PortionAction"
+              },
+              {
+                "$ref": "#/components/schemas/LocksAction"
+              },
+              {
+                "$ref": "#/components/schemas/ChecksAction"
+              },
+              {
+                "$ref": "#/components/schemas/UndoAction"
+              }
+            ],
+            "title": "Action"
+          },
+          "baseRevision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Baserevision",
+            "type": "integer"
+          },
+          "operationId": {
+            "format": "uuid",
+            "title": "Operationid",
+            "type": "string"
+          },
+          "planId": {
+            "format": "uuid",
+            "title": "Planid",
+            "type": "string"
+          },
+          "schemaVersion": {
+            "const": 1,
+            "title": "Schemaversion",
+            "type": "integer"
+          },
+          "sessionGeneration": {
+            "format": "uuid",
+            "title": "Sessiongeneration",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "planId",
+          "sessionGeneration",
+          "baseRevision",
+          "operationId",
+          "action"
+        ],
+        "title": "PlanActionRequest",
         "type": "object"
       },
       "PlanCandidate-Input": {
@@ -1401,6 +1594,43 @@
           "equipment"
         ],
         "title": "PlanningConstraints",
+        "type": "object"
+      },
+      "PortionAction": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "slot": {
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ],
+            "title": "Slot",
+            "type": "string"
+          },
+          "type": {
+            "const": "portion",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "slot",
+          "type",
+          "quantity"
+        ],
+        "title": "PortionAction",
         "type": "object"
       },
       "PortionDestination": {
@@ -1929,6 +2159,96 @@
         "title": "RecipeStep",
         "type": "object"
       },
+      "SessionInit": {
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": 1,
+            "title": "Schemaversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schemaVersion"
+        ],
+        "title": "SessionInit",
+        "type": "object"
+      },
+      "SessionState": {
+        "additionalProperties": false,
+        "properties": {
+          "canUndo": {
+            "title": "Canundo",
+            "type": "boolean"
+          },
+          "csrfToken": {
+            "pattern": "^[a-f0-9]{64}$",
+            "title": "Csrftoken",
+            "type": "string"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Evaluation-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "title": "Expiresat",
+            "type": "string"
+          },
+          "lastOperationId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastoperationid"
+          },
+          "planId": {
+            "format": "uuid",
+            "title": "Planid",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "schemaVersion": {
+            "const": 1,
+            "title": "Schemaversion",
+            "type": "integer"
+          },
+          "sessionGeneration": {
+            "format": "uuid",
+            "title": "Sessiongeneration",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "sessionGeneration",
+          "planId",
+          "revision",
+          "expiresAt",
+          "csrfToken",
+          "current",
+          "canUndo",
+          "lastOperationId"
+        ],
+        "title": "SessionState",
+        "type": "object"
+      },
       "ShoppingDiff": {
         "additionalProperties": false,
         "properties": {
@@ -2074,6 +2394,21 @@
         "title": "ShoppingList",
         "type": "object"
       },
+      "UndoAction": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "const": "undo",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "UndoAction",
+        "type": "object"
+      },
       "ValidateProposalRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2150,6 +2485,128 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/plan": {
+      "get": {
+        "operationId": "plan_read_contract_api_plan_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Plan Read Contract",
+        "tags": [
+          "worker-only"
+        ]
+      }
+    },
+    "/api/plan/actions": {
+      "post": {
+        "operationId": "plan_action_contract_api_plan_actions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Plan Action Contract",
+        "tags": [
+          "worker-only"
+        ]
+      }
+    },
+    "/api/session": {
+      "delete": {
+        "operationId": "session_clear_contract_api_session_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearedSession"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Session Clear Contract",
+        "tags": [
+          "worker-only"
+        ]
+      },
+      "post": {
+        "operationId": "session_create_contract_api_session_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionInit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Session Create Contract",
+        "tags": [
+          "worker-only"
+        ]
+      }
+    },
     "/api/v1/goals/validate": {
       "post": {
         "operationId": "validate_api_v1_goals_validate_post",

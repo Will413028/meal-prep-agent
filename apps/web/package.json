@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.60.2",
+    "@cloudflare/workers-types": "5.20260928.1",
     "@playwright/test": "1.63.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
@@ -35,6 +36,7 @@
     "@vinext/cloudflare": "1.0.0-beta.11",
     "@vitejs/plugin-react": "6.1.1",
     "@vitejs/plugin-rsc": "0.5.35",
+    "esbuild": "0.28.1",
     "miniflare": "5.20260925.0-alpha",
     "openapi-typescript": "7.13.0",
     "typescript": "~5.9.3",

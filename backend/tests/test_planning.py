@@ -85,6 +85,26 @@ def test_outside_dates_and_duplicate_slots_are_rejected():
         evaluate(candidate((chicken(), chicken())))
 
 
+def test_explicit_breakfast_can_be_unlocked_outside_the_agent_requested_slots():
+    plan = candidate(
+        (
+            PlannedMeal(
+                day="2026-10-01",
+                slot="breakfast",
+                kind="recipe",
+                recipeId="oat-yogurt",
+                quantity=1,
+                locked=False,
+            ),
+        )
+    )
+    plan.constraints.slots = ("lunch", "dinner")
+    result = evaluate(plan)
+    assert result.candidate.meals[0].locked is False
+    assert result.days[0].coverage == ("breakfast",)
+    assert result.days[0].withinTargets is None
+
+
 def test_soft_time_limit_keeps_meal_but_reports_the_compromise():
     plan = candidate((chicken(),))
     plan.constraints.timeLimitMinutes = 10
