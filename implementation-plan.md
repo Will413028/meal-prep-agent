@@ -4,7 +4,7 @@
 
 ## 1. 前提與接續方式
 
-維持 Next.js／TypeScript、FastAPI／PydanticAI、AG-UI、Python Modular Monolith；Web 本機身體估算、Python 配餐驗證、D1 雲端保存與匿名 Cookie。第一版無帳號、Temporal 或跨裝置保存。免費模型與 Python 獨立部署的限制仍有效；部署主機尚未決定。保存採 D1＋匿名 Cookie 已確認，不新增登入帳號；身份與餐單歸屬檢查屬 Worker 責任。
+維持 Next.js／TypeScript、FastAPI／PydanticAI、AG-UI、Python Modular Monolith；Web 本機身體估算、Python 配餐驗證、D1 雲端保存與匿名 Cookie。第一版無帳號、Temporal 或跨裝置保存。免費模型與 Python 獨立部署的限制仍有效；部署主機已選既有 Oracle VM，以專案獨立容器／網路／Tunnel 隔離。保存採 D1＋匿名 Cookie 已確認，不新增登入帳號；身份與餐單歸屬檢查屬 Worker 責任。
 
 開始每個項目前，在實際 checkout 執行 `git status --short`、`git log -5 --oneline`、`git ls-files`，命令帶絕對路徑或 `git -C <repo>`。核對三份規格及下表證據；若實際檔案或版本與上次不同，先查差異與受影響 consumer，再接續，不覆蓋別人的未提交內容。新增契約前以 `rg` 搜尋既有 producer、consumer 與測試，將結果記在該項證據。
 
@@ -51,7 +51,7 @@
 | T08 | T02、T07 | 雙入口與手動操作完整切片 | 本地驗收完成：兩入口、營養／比較、採用換菜恢復及故障唯讀；設計與正確性審查已修正 |
 | T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 已驗收：正式 tools／Worker／聊天、取消與故障恢復、兩輪提案及一次 GLM live 完整工具鏈；品質矩陣留 T12 |
 | T10 | T09 | 多分頁、隱私與限額故障測試 | 已驗收（本地）：入口限流／body／run／token 預算、模式選擇／額度恢復、隱私／雙匿名context與mutation；真部署邊界留T11 |
-| T11 | T10；部署條件具備 | 實際環境與完整 K3 | 未開始 |
+| T11 | T10；部署條件具備 | 實際環境與完整 K3 | 進行中：Oracle 主機已確認，容量盤點完成；部署／隔離／回復待驗 |
 | T12 | T11 | live K4 與完整 MVP 驗收 | 未開始 |
 
 每項可記「未開始／RED／GREEN／REFACTOR／已驗收／受阻」。只有必要案例與外部條件都有證據才標已驗收；以下內容是測試設計，尚不是執行結果。
@@ -346,3 +346,9 @@
 - Mutation與首次RED分開記錄：`.artifacts/t10-mutations-result.log` 逐一移除Python/Web body、8則history、2000字／8000總字、4requests／8tools、deadline、input/output token各預算，皆因對應assertion失敗；`t10-boundary-mutations-result.log` 移除CSRF／owner／問卷whitelist均被抓到。移除正式chat wrapper runId檢查時，foreign-run從「AI未完成」變成「提案已完成」而測試紅（`t10-mutation-runid.log`）；改provider cap2048→4096，實際HTTP assertion紅（`t10-mutation-provider-cap.log`）。全部finally還原，再跑整批回歸。fake browser clock驗59秒仍執行、60秒取消且無提案；真TCPprovider清理仍通過。
 - 獨立審查：design-review NO DESIGN FINDINGS，涵蓋官方adapter擴充、模式／fixture、身分／CAS、body雙邊界、deadline／abort、rate locality、provider暫停與費用宣稱。correctness 1改：缺planning原KeyError/500，新增必填guard；`t10-review-red.log` 1 RED→`t10-review-green.log` 4 GREEN。檢查repo與second-brain status/log，未有reviewer寫入或commit。
 - 最終驗證命令與結果集中 `.artifacts/t10-final-*.log`：`uv run --project backend --frozen pytest backend/tests -q` 153 passed、`pnpm test:web` 106 passed、`MEAL_TEST_WORKER=1 pnpm test:e2e` 35 passed、`pnpm test:e2e` Node 12 passed；ruff check／format、mypy（38 source files）、typecheck、contracts:check／wire（Python2＋TS2）、Next/vinext build 通過。1440px／390px 模式選擇與聊天畫面已目視檢查。階段僅聲稱本地T10驗收；T11真部署／logging／入口隔離與T12完整live品質、遠端CI仍未完成。
+
+
+### T11 執行紀錄（2026-09-28）
+
+- Will 選定既有 Oracle 主機，Meal Prep 使用獨立容器、網路與 Tunnel，不共用其他產品資料／憑證。唯讀 `ssh oci-a1` 盤點：aarch64、4 CPU、available memory 21,263 MiB、root 121G available；即時證據 `.artifacts/t11-host-inventory.log`。不增 VM／disk 配置，不將瞬間空閒視為負載驗收。
+- CI 等價 lint 揭露 `--config backend/pyproject.toml` 與自動探索的 first-party 分類不同，21 個 I001；明確設定 known-first-party meal_prep 後同命令 check／format 通過。這是工具設定修正，不是產品行為 TDD；RED／GREEN 見 `t10-ci-lint.log`／`t11-ci-lint-green.log`。

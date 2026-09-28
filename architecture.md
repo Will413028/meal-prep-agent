@@ -32,7 +32,7 @@
 
 Web 優先評估 Cloudflare Workers 的 [vinext 路徑](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)，不符需求再評估 [OpenNext](https://developers.cloudflare.com/workers/framework-guides/web-apps/opennext/)。實際依賴版本及指令在整合驗證後寫入 lockfile 和 README，不預先宣稱任一套件可直接部署。
 
-FastAPI／PydanticAI 在獨立 Python 主機執行，不放進 workerd。Workers 提供 Web、匿名 session／餐單保存 API 與固定上游的 Python／AG-UI proxy：限制路徑、方法與 body，不能成為任意 URL proxy；使用者資料回應不得共享快取。Python 主機的容量、費用及入口隔離尚待定案，不能把允許 Cloudflare 解讀成已有免費 Python 主機。先完成本機整合，再決定部署；不複製其他產品的環境檔或憑證。
+FastAPI／PydanticAI 在獨立 Python 主機執行，不放進 workerd。Workers 提供 Web、匿名 session／餐單保存 API 與固定上游的 Python／AG-UI proxy：限制路徑、方法與 body，不能成為任意 URL proxy；使用者資料回應不得共享快取。Python 主機已由使用者選定既有 Oracle VM；採專案獨立容器、網路與具名 Tunnel，透過 Workers VPC 固定服務 binding 隔離入口，不新增 VM 規格或磁碟。容量、資源限制、串流及實際入口隔離由 T11 驗證；不複製其他產品的環境檔或憑證。
 
 免費模型首個候選為 Workers AI `@cf/zai-org/glm-4.7-flash`，依據 [模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。Python 透過 [OpenAI-compatible endpoint](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/) 接入；資格、工具往返及 PydanticAI 相容性仍須實測。憑證只留後端；不因介面相容就宣稱整合完成。
 
