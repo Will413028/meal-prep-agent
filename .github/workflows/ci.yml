@@ -1,0 +1,64 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.2"
+          python-version: "3.13"
+      - run: uv sync --project backend --frozen
+      - run: uv run --project backend ruff check --config backend/pyproject.toml backend scripts
+      - run: uv run --project backend ruff format --check --config backend/pyproject.toml backend scripts
+      - run: uv run --frozen mypy
+        working-directory: backend
+      - run: uv run --frozen pytest --junitxml=../.artifacts/pytest.xml
+        working-directory: backend
+      - run: python3 scripts/check-test-report.py .artifacts/pytest.xml
+      - run: uv build --project backend --wheel --out-dir .artifacts/dist
+      - name: Verify wheel outside checkout
+        shell: bash
+        run: |
+          uv venv "$RUNNER_TEMP/meal-wheel"
+          uv pip install --python "$RUNNER_TEMP/meal-wheel/bin/python" .artifacts/dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/meal-wheel/bin/python" -I -c 'from meal_prep.bootstrap.app import create_app; assert any(r.path == "/health" for r in create_app().routes)'
+  web:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      PYDANTIC_AI_NO_BANNER: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "11.2.2"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.7.2"
+          python-version: "3.13"
+      - run: uv sync --project backend --frozen
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm contracts:check
+      - run: pnpm test:contracts
+      - run: pnpm --filter @meal-prep/web exec vitest run --reporter=default --reporter=junit --outputFile=../../.artifacts/vitest.xml
+      - run: python3 scripts/check-test-report.py .artifacts/vitest.xml
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: pnpm --filter @meal-prep/web exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - run: python3 scripts/check-test-report.py .artifacts/playwright.xml
+      - run: pnpm --filter @meal-prep/web test:d1
+      - run: pnpm --filter @meal-prep/web build:vinext
+      - run: MEAL_TEST_WORKER=1 pnpm test:e2e
+      - run: python3 scripts/check-test-report.py .artifacts/playwright.xml

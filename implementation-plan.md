@@ -1,6 +1,6 @@
 # Meal Prep Agent — TDD 實作計畫
 
-更新：2026-09-28。狀態：規劃完成，尚未執行。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
+更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 整合驗證中。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
 
 ## 1. 前提與接續方式
 
@@ -8,7 +8,7 @@
 
 開始每個項目前，在實際 checkout 執行 `git status --short`、`git log -5 --oneline`、`git ls-files`，命令帶絕對路徑或 `git -C <repo>`。核對三份規格及下表證據；若實際檔案或版本與上次不同，先查差異與受影響 consumer，再接續，不覆蓋別人的未提交內容。新增契約前以 `rg` 搜尋既有 producer、consumer 與測試，將結果記在該項證據。
 
-規劃起點為 `.gitignore`、AGENTS、README、產品及營養政策，之後新增架構與本計畫；尚無應用或 manifest。表內路徑是預計落點，不是假設已存在的命令或程式。此輪只寫計畫，不安裝依賴、讀取 secrets、登入或部署。
+規劃起點為 `.gitignore`、AGENTS、README、產品及營養政策，之後新增架構與本計畫；T00 已建立應用、manifest、lockfiles 與測試；目標 API、本機估算及確認畫面已有實作。未建立的模組仍為預計落點。
 
 ## 2. RED → GREEN → REFACTOR 規則
 
@@ -40,10 +40,10 @@
 
 | 項目 | 依賴 | 交付結果 | 狀態 |
 |---|---|---|---|
-| T00 | 無 | 可執行測試環境、封裝、基本 CI | 未開始 |
-| T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 未開始 |
-| T02 | T01 | 本機身體估算及確認邊界 | 未開始 |
-| T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 未開始 |
+| T00 | 無 | 可執行測試環境、封裝、基本 CI | 已驗收（本機）：封裝／測試／build；CI 定義已建立，遠端執行於 T12 核對 |
+| T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 部分 GREEN：目標 API／生成契約；Worker DTO、日期與餐單比較待補 |
+| T02 | T01 | 本機身體估算及確認邊界 | 部分 GREEN：八列估算／表單／確認；完整 metadata、鄰級比較與隱私 gate 待補 |
+| T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 進行中：官方 adapter／workerd SSE／本地 D1 GREEN；live 工具往返 GREEN；UI run token、斷線待驗 |
 | T04 | T01、T03 可行性 | 食譜資料與營養計算 | 未開始 |
 | T05 | T04 | 三天提案、局部修改及硬限制 | 未開始 |
 | T06 | T05 | 購物、庫存與備餐衍生資料 | 未開始 |
@@ -189,4 +189,28 @@
 
 每一已驗收項需能對回可重跑命令；若 RED 不是預期原因，修測試環境或資料後重新確認，不能照抄本計畫的預期文字充當證據。純文件檢查不列入應用 RED／GREEN。
 
-尚無實作證據。下一個可執行項為 T00。外部 gate 受阻時記具體缺口及可獨立推進項；不將 blocked 標成完成。未部署的變更以 forward fix 或精確 revert 回復，保留他人的工作；不以整庫 reset 作為一般回復方式。
+### 2026-09-28 執行紀錄（未提交）
+
+- T00：`test_health.py` 先 404 assertion RED，加入 `/health` 後 GREEN；fixture 標示在 Vitest／Playwright 都先缺元素 RED，再 GREEN。故意改錯 health 回應會失敗，已還原。wheel 在 `.artifacts/wheel-env` 安裝後由 `/tmp` 以 `python -I` import 成功。JUnit guard 的 zero／all-skipped／failure 反例均被拒絕。
+- T01：目標 API 的有效輸入先 404 RED；邊界循環 21 failed → 23 passed，區間／能量衝突循環 5 failed → 37 passed。獨立 review 找到原始 JSON number 經 float 提早取整，以及回應版本未列 required；各加 2 個 RED 後修正。現在 API 保留 Decimal lexeme 到驗證，生成 schema 要求回應版本。
+- T01：`pnpm contracts:check` 與 `pnpm test:contracts` 通過；真 FastAPI HTTP 序列化結果交給 TS client／Ajv 驗證。數字字串、缺欄位、錯版本已有失敗案例；生成漂移 mutation 已完成；保存 DTO／日期與 T04 的餐單總值規則待補。
+- T02：八列 golden 與蛋白質先 9 failed，實作後 GREEN；適用範圍與缺值再 23 failed → GREEN。Web 單元當時 45 passed（含 API runtime validator）；問卷資料只在記憶體計算。
+- 畫面：手動目標確認先缺表單 RED，引導估算先缺入口 RED。實際 Web → Python route 先 1 failed／3 passed，再 4 passed；另驗舊 confirmed goal 不被 draft 改寫、問卷未出現在 API payload 或 localStorage／sessionStorage，重整後清空。尚無雲端保存。
+- T03：PydanticAI 2.51.0＋官方 AGUIAdapter，tool round-trip 先 404 RED → GREEN；取消與無工具結果兩案例 2 failed／1 passed → 3 passed。probe 獨立 app，合成 outcome 明確 `adoptable: false`，不掛入正式 app；未呼叫真模型。
+- 工具版本：Python 3.13.13、Node 26.8.1、pnpm 11.2.2、uv 0.7.2、Next 16.3.5、React 19.3.0、TypeScript 5.9.3、pytest 9.1.1、Vitest 4.1.11、Playwright 1.63.0。依賴實際版本以兩個 lockfiles 為準。
+- 環境故障獨立記錄：4317／4318 與 Docker listener 衝突，`lsof -nP -iTCP:4317 -iTCP:4318 -sTCP:LISTEN` 證實；改用 14317／14318 後同測試可執行。pnpm 拒絕 esbuild／workerd install script 後，明確 allowlist 再安裝。以上都不是行為 RED。
+- 本機證據位於 ignored `.artifacts/`：`t00/*-red.log`、`health-mutation.log`、`agent-red.log`、`agent-outcome-{red,green}.log`、`web-python-red.log`、`web-final.log` 與 JUnit XML。可重跑命令見 README；遠端 CI／部署與完整 K1–K4 尚未驗收。
+
+- T03 workerd：vinext 1.0.0-beta.13、Wrangler 4.141.0、Miniflare 5.20260925.0-alpha。首次啟動發現 Ajv runtime compile 不相容，改用同源 schema 的 standalone 預編譯；第二次抓到 redirect:error 不支援，新增回歸先 RED、改 manual＋拒絕 3xx 後 GREEN。Node 與 workerd 共用 fixed-path proxy，不轉送 Cookie。
+- T03 workerd 瀏覽器：四個既有案例通過；新增 SSE 案例先 `/api/agent` 404 → 加固定串流 route → 5 passed（`.artifacts/sse-green.log`）。官方 adapter 完成 synthetic tool 往返，outcome 綁 runId 且明確不可採用。此案例驗事件傳輸，尚不等於 UI run token／真斷線及完整 K2。
+- 本地 D1：`pnpm --filter @meal-prep/web test:d1` 通過 ephemeral binding 的 prepared write／read／missing-row smoke；使用 Miniflare 5 原生 config。沒有正式保存 schema、CAS 或雲端 D1。
+- Mutation：TS 型別產物與 standalone validator 各自加入漂移，生成 gate 均拒絕；成人門檻 19 改 18，38 個 estimator 案例中對應 1 個失敗；已精確還原，見 `.artifacts/mutation-{0,1,2}.log`。不把 mutation 當首次 RED。
+- 獨立設計審查涵蓋契約生成／proxy／取消／probe factories／Cloudflare 接線，兩輪皆無設計發現。先前 correctness review 的兩個契約問題已修正；未提交或推送。
+- Cloudflare OAuth 登入狀態已由 Wrangler 確認；live factory 所需專案 API 環境變數未設定，Will 隨後提供指定 Cloudflare 設定，account token 驗證 active；以該 token 完成一次 GLM live 工具往返。登入／下載已授權，不再重問。遠端 CI、部署、正式 D1 保存與 T04–T12 仍未完成。
+
+- Live：2026-09-28，固定 `@cf/zai-org/glm-4.7-flash` 完成官方 adapter 的 tool call／result／proposal_ready／RUN_FINISHED，HTTP 200，9.71 秒，無 RUN_ERROR；`.artifacts/live-probe.log` 僅保存事件類型與合成 outcome，不記憑證。一次 transport probe 不等於 K4 品質／用量驗收；未量 Neuron。token 依使用者指定來源沿用，未另建 token。
+- 空間限制：本機曾 ENOSPC，僅清除本輪可重建快取後剩約 211 MiB；後續 df 已恢復約 4.1 GiB；大型安裝／build 前仍先查可用空間。
+
+### 全計畫持續執行
+
+使用者已指定完成本計畫全部 T00–T12 為目標，並授權每階段必要驗證通過後直接 commit；不因已有部分 GREEN 即結束整體目標。基礎切片先提交，後續 commit 依各階段完成範圍命名，外部 gates 仍需真實證據。

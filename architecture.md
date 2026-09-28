@@ -1,6 +1,6 @@
 # Meal Prep Agent — 技術選型與架構
 
-更新：2026-09-28。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。這是已確認的開發方向；尚未安裝依賴、建立應用或部署，K1–K4 全部待驗證。
+更新：2026-09-28。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。這是已確認的開發方向；已有應用骨架、目標 API、生成契約與本機估算；尚未部署，完整 K1–K4 仍待驗收。
 
 [產品規格](product-spec.md) 定義 A1–A14；[營養政策](nutrition-policy.md) 定義數值、公式及 N1–N8。本文件是技術選型與模組責任的主要依據。
 
@@ -59,7 +59,7 @@ flowchart LR
 
 ## 4. 專案結構與依賴
 
-以下是預計結構，尚未建立目錄或程式：
+以下為目標結構；目前只建立實際用到的 nutrition、platform、bootstrap 與 Web goals 模組：
 
 ```text
 apps/web/src/
@@ -135,6 +135,7 @@ DRI 係數及 golden fixtures 以版本化政策資料維護，Web 由該資料�
 | 入口 | 責任 |
 |---|---|
 | `GET /health` | 技術健康狀態，不包含使用者內容或模型呼叫 |
+| `POST /api/v1/goals/validate` | 驗證明確輸入的營養目標草稿並回傳範圍；不接收身體問卷、不保存、不自動確認 |
 | `POST /api/v1/plans/evaluate` | 不呼叫模型的餐單重算；用於調份量及恢復後驗證 |
 | `POST /api/v1/proposals/validate` | 重算、檢查 scope／鎖定及來源，回 canonical proposal；只回 canonical candidate，不直接寫 D1 |
 | `POST /agent` | request-scoped PydanticAI run，透過官方 AGUIAdapter 串流 |
@@ -206,6 +207,6 @@ Worker CPU 限制只用於 Web／proxy；Python 的時間及記憶體另量測�
 
 沿用產品規格第 11 節相依順序：最小 Web／API／AG-UI 契約 → Python 計算及資料、Web 估算 → 提案與 D1 保存 → live 與部署。先走手動目標、三天提案、採用、局部換菜、清單與重開恢復的切片，再補齊完整 A1–A14，不縮減已確認 MVP。
 
-pytest 驗證 Python 業務規則；Vitest 驗證 Web estimator／state／storage；Playwright 驗證兩入口、串流、跨分頁、匿名身份及 D1 保存失敗。合成案例可重跑與真模型驗收分開記錄。尚無實際測試或命令；建立骨架後再補 README／AGENTS。
+pytest 驗證 Python 業務規則；Vitest 驗證 Web estimator／state／storage；Playwright 驗證兩入口、串流、跨分頁、匿名身份及 D1 保存失敗。合成案例可重跑與真模型驗收分開記錄。已實作部分目標與估算測試；命令見 README，真實 RED／GREEN 與尚缺的 gate 見 implementation-plan。
 
 若未來需要長時間接續任務或跨裝置資料，再分別評估 Temporal 與帳號／PostgreSQL，重新定義資料權威及恢復契約；本次不預建這些能力。

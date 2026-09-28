@@ -1,0 +1,373 @@
+{
+  "components": {
+    "schemas": {
+      "GoalRanges": {
+        "additionalProperties": false,
+        "properties": {
+          "carbs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Range"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fat": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Range"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kcal": {
+            "$ref": "#/components/schemas/Range"
+          },
+          "protein": {
+            "$ref": "#/components/schemas/Range"
+          }
+        },
+        "required": [
+          "kcal",
+          "protein",
+          "carbs",
+          "fat"
+        ],
+        "title": "GoalRanges",
+        "type": "object"
+      },
+      "GoalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "carbs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/components/schemas/InputRange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Daily carbohydrates in grams",
+            "title": "Carbs"
+          },
+          "fat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/components/schemas/InputRange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Daily fat in grams",
+            "title": "Fat"
+          },
+          "kcal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/components/schemas/InputRange"
+              }
+            ],
+            "description": "Daily energy in kcal",
+            "title": "Kcal"
+          },
+          "protein": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/components/schemas/InputRange"
+              }
+            ],
+            "description": "Daily protein in grams",
+            "title": "Protein"
+          },
+          "schemaVersion": {
+            "const": 1,
+            "title": "Schemaversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kcal",
+          "protein",
+          "schemaVersion"
+        ],
+        "title": "GoalRequest",
+        "type": "object"
+      },
+      "GoalResult": {
+        "additionalProperties": false,
+        "properties": {
+          "policyVersion": {
+            "const": "nutrition-v1",
+            "default": "nutrition-v1",
+            "title": "Policyversion",
+            "type": "string"
+          },
+          "ranges": {
+            "$ref": "#/components/schemas/GoalRanges"
+          },
+          "requested": {
+            "$ref": "#/components/schemas/GoalValues"
+          },
+          "schemaVersion": {
+            "const": 1,
+            "default": 1,
+            "title": "Schemaversion",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schemaVersion",
+          "policyVersion",
+          "requested",
+          "ranges"
+        ],
+        "title": "GoalResult",
+        "type": "object"
+      },
+      "GoalValues": {
+        "additionalProperties": false,
+        "properties": {
+          "carbs": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/components/schemas/InputRange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Daily carbohydrates in grams",
+            "title": "Carbs"
+          },
+          "fat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/components/schemas/InputRange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Daily fat in grams",
+            "title": "Fat"
+          },
+          "kcal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/components/schemas/InputRange"
+              }
+            ],
+            "description": "Daily energy in kcal",
+            "title": "Kcal"
+          },
+          "protein": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "$ref": "#/components/schemas/InputRange"
+              }
+            ],
+            "description": "Daily protein in grams",
+            "title": "Protein"
+          }
+        },
+        "required": [
+          "kcal",
+          "protein"
+        ],
+        "title": "GoalValues",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "InputRange": {
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          }
+        },
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "InputRange",
+        "type": "object"
+      },
+      "Range": {
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          }
+        },
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "Range",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Meal Prep API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/goals/validate": {
+      "post": {
+        "operationId": "validate_api_v1_goals_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GoalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoalResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validate",
+        "tags": [
+          "goals"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    }
+  }
+}

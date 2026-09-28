@@ -1,0 +1,14 @@
+{
+  "name": "meal-prep-agent",
+  "private": true,
+  "packageManager": "pnpm@11.2.2",
+  "scripts": {
+    "test:web": "pnpm --filter @meal-prep/web test",
+    "typecheck": "pnpm --filter @meal-prep/web typecheck",
+    "build": "pnpm --filter @meal-prep/web build",
+    "test:e2e": "pnpm --filter @meal-prep/web test:e2e",
+    "contracts:generate": "uv run --project backend --frozen python -m meal_prep.bootstrap.export_schema --output contracts/openapi.json && node apps/web/scripts/contracts.mjs",
+    "contracts:check": "uv run --project backend --frozen python -m meal_prep.bootstrap.export_schema --check --output contracts/openapi.json && node apps/web/scripts/contracts.mjs --check",
+    "test:contracts": "uv run --project backend --frozen pytest backend/tests/test_contract_wire.py -q --junitxml=.artifacts/wire-pytest.xml && python3 scripts/check-test-report.py .artifacts/wire-pytest.xml && pnpm --filter @meal-prep/web exec vitest run --config vitest.contracts.config.ts --reporter=default --reporter=junit --outputFile=../../.artifacts/wire-vitest.xml && python3 scripts/check-test-report.py .artifacts/wire-vitest.xml"
+  }
+}
