@@ -1,8 +1,8 @@
 # Meal Prep Agent — MVP 產品規格
 
-更新：2026-09-29。狀態：產品方向、營養政策與匿名雲端保存契約已確認；保存 API／資料正由 D1 遷往 Oracle SQLite，完成狀態見 implementation-plan.md。
+更新：2026-09-29。狀態：MVP 已依本規格完成驗收；匿名保存 API／資料已由 D1 遷往 Oracle SQLite，證據見 implementation-plan.md。
 
-本文件定義第一版的使用情境、互動、資料契約與驗收。[營養政策 v1](nutrition-policy.md) 定義公式、產品預設及邊界；[技術架構](architecture.md) 補上模組、提案／SQLite 條件提交及整合 gates。Cloudflare 整合仍須依第 10 節驗證，不將文件規劃當成可運行成果。
+本文件定義第一版的使用情境、互動、資料契約與驗收。[營養政策 v1](nutrition-policy.md) 定義公式、產品預設及邊界；[技術架構](architecture.md) 補上模組、提案／SQLite 條件提交及整合 gates。Cloudflare 整合與正式運行證據見 [實作計畫](implementation-plan.md)，不以文件規劃取代實測。
 
 ## 1. 產品定位與已確認方向
 
@@ -14,7 +14,7 @@
 - 核心能力為設定目標、產生餐單、營養總覽、局部換菜／調份量、備餐與購物清單、條件衝突協商。
 - 對話與餐單卡片操作同一份計畫，支援鎖定、變更預覽與復原。
 - 展示使用明確標示的合成資料，程式與設定獨立；框架採 Next.js＋TypeScript、Python＋FastAPI／PydanticAI 與 AG-UI。
-- 模型只使用免費額度；使用者允許採用 Cloudflare。Workers AI 與具體部署組合列為優先候選，仍須完成第 10 節相容性驗證，不自動啟用付費模型或超額計費。
+- 模型只使用免費額度；Cloudflare Workers AI、Oracle Web／API 與 SQLite 保存的具體部署組合已通過第 10 節驗收，不自動啟用付費模型或超額計費。
 
 本稿將首次體驗收斂為單人、連續三天、每天早餐／午餐／晚餐；點心可選填。同一個已確認目標預設套用三天，不加入訓練日與休息日週期化設定。
 
@@ -207,7 +207,7 @@ Mifflin–St Jeor 的 [原研究](https://pubmed.ncbi.nlm.nih.gov/2305711/) 保�
 
 Agent 每次只接受必要的已確認目標、餐單／條件／待確認提案快照、當次訊息及有長度上限的本分頁對話上下文；不將原始身體表單混入上下文。服務端重新驗證資料與工具參數；PydanticAI run context 限該次 FastAPI 請求，不以服務全域記憶體保存跨使用者對話。應用 log 只記技術狀態與用量，不記訊息或身體欄位。自由聊天會送往模型，介面需與「身體表單只在本機計算」分別說明。
 
-A13／A14 的驗證包含關頁恢復、匿名身份隔離、SQLite 寫入失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；歷史 D1 與遷移後部署證據見 implementation-plan.md T07／T11，完整 K3 尚待切換後重驗。
+A13／A14 的驗證包含關頁恢復、匿名身份隔離、SQLite 寫入失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；歷史 D1 與遷移後部署證據見 implementation-plan.md T07／T11，K3 已在切換後重驗。
 
 ## 11. 建議實作順序
 

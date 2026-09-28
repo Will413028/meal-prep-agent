@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up Meal Prep SQLite sessions
+RequiresMountsFor=/home/ubuntu/meal-prep-agent/deploy/data
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/bin/sh /home/ubuntu/meal-prep-agent/scripts/backup-session-db.sh
+NoNewPrivileges=true
+PrivateTmp=true

@@ -4,7 +4,7 @@
 
 ## 目前狀態
 
-已確認 MVP 產品方向、只用免費模型額度，並允許使用 Cloudflare。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 比較選型、定義模組／資料流及整合驗證。已選定 Next.js＋FastAPI／PydanticAI；Oracle 原生 Web／API、Cloudflare 入口與 D1 舊保存已部署，真模型矩陣及遠端 CI 已通過；目前正將保存 API／資料遷至 Oracle SQLite，再重驗 K3 Worker CPU。T00–T10 的開發與本地驗收紀錄、T11 部署證據及 T12 真模型案例見 [實作計畫](implementation-plan.md)。
+MVP 已按 T00–T12 完成實作與驗收，只用免費模型額度。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 定義模組與資料流。Oracle 原生 Web／API、Cloudflare 公開入口與 SQLite 保存已部署；舊 D1 資料保留供回復，正式 Worker 不再使用 D1。真模型矩陣、正式瀏覽器、Free CPU 取樣及遠端 CI 證據見 [實作計畫](implementation-plan.md)。
 
 ## MVP 範圍
 
@@ -72,6 +72,6 @@ PYDANTIC_AI_NO_BANNER=1 uv run --env-file .env.cloudflare.local --project backen
 MEAL_DEPLOYED_ORIGIN=https://<正式 HTTPS 入口> node scripts/live-browser-acceptance.mjs 1
 ```
 
-保存端點由 `apps/web/src/app/api/` 的 Oracle Web route 提供，Worker 僅代理明列路徑；公開 DTO 從 Python schema-only router 生成，該 router 不掛在 Python runtime。`wrangler.jsonc` 不再綁定 D1，production 使用兩個 VPC binding；舊 D1 schema 與資料保留供遷移／回復，部署流程見 [deploy/README.md](deploy/README.md)。舊測試快照若缺逐餐營養或目標差距欄位，會保留原列並回報格式不相容；使用者須明確選擇「開始新規劃」，不自動遷移或刪除。
+保存端點由 `apps/web/src/app/api/` 的 Oracle Web route 提供，Worker 僅代理明列路徑；公開 DTO 從 Python schema-only router 生成，該 router 不掛在 Python runtime。`wrangler.jsonc` 不綁定 D1，production 使用兩個 VPC binding；舊 D1 schema 與資料保留供回復，部署流程見 [deploy/README.md](deploy/README.md)。舊測試快照若缺逐餐營養或目標差距欄位，會保留原列並回報格式不相容；使用者須明確選擇「開始新規劃」，不自動遷移或刪除。
 
 契約 validator 在生成階段以 Ajv standalone＋固定 esbuild bundle 為 ESM，Worker 不執行 Ajv 動態編譯。雙 runtime 切換後 `typecheck` 會先 `next typegen` 更新生成型別。開發前請讀 [AGENTS.md](AGENTS.md)。

@@ -1,6 +1,6 @@
 # Meal Prep Agent — 技術選型與架構
 
-更新：2026-09-29。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。雙入口、餐單與正式 Agent 已實作；Oracle Web／API 與 Cloudflare 入口已部署。Will 已決定把保存 API／資料由 D1 遷至 Oracle 專用 SQLite，正在完成資料切換及 K3 重驗；K1／K2、K4 與遠端 CI 證據見 [實作計畫](implementation-plan.md)。
+更新：2026-09-29。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。雙入口、餐單與正式 Agent 已實作；Oracle Web／API、SQLite 保存及 Cloudflare 入口已部署。D1→SQLite 資料切換與 K3 Free CPU 重驗已完成；K1／K2／K4 與遠端 CI 證據見 [實作計畫](implementation-plan.md)。
 
 [產品規格](product-spec.md) 定義 A1–A14；[營養政策](nutrition-policy.md) 定義數值、公式及 N1–N8。本文件是技術選型與模組責任的主要依據。
 
@@ -210,7 +210,7 @@ Web／API／契約／政策版本不相容時停止新操作、提示重新載�
 
 K4 的繁中品質以訪客實際可見的受控提案摘要、澄清問題、失敗訊息與預覽卡片驗收；原始模型文字只留於忽略追蹤的合成案例 artifact 作診斷，不能拿它冒充產品回覆。模型只決定正式工具呼叫，已確認輸入由請求持有；`find_recipes` 給模型有來源的食譜選項，`build_proposal` 只回簡短狀態，完整 canonical 提案不再送回模型，而是由已驗事件直接送瀏覽器。工具參數失敗或模型查詢後未完成提案須有明確失敗狀態與重試；必要澄清透過受控 `clarification_required` 呈現。
 
-Worker CPU 限制只用於 Web／proxy；Python 的時間及記憶體另量測。Node build、fixture 或文件檢查都不能替代實際 runtime／live 結果。
+Worker CPU 限制適用公開代理；Oracle Web／Python 的時間及記憶體另量測。Node build、fixture 或文件檢查都不能替代實際 runtime／live 結果。
 
 ## 10. 實作與驗證順序
 
