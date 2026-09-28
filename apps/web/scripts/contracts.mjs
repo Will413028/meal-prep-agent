@@ -16,8 +16,9 @@ const outputs = {
   "goal-validator.js": "// Generated from contracts/openapi.json. Do not edit.\n" + standaloneCode(ajv, validate),
   "goal-validator.d.ts": "// Generated. Do not edit.\nexport default function validate(value: unknown): boolean;\n",
 };
-for (const name of ["Evaluation", "CanonicalProposal", "BuildProposalResult"]) {
-  const validator = ajv.compile({ $ref: `#/components/schemas/${name}`, components: schema.components });
+for (const [name, path] of [["Evaluation", "/api/v1/plans/evaluate"], ["CanonicalProposal", "/api/v1/proposals/validate"], ["BuildProposalResult", "/api/v1/proposals/build"]]) {
+  const response = schema.paths[path].post.responses["200"].content["application/json"].schema;
+  const validator = ajv.compile({ ...response, components: schema.components });
   outputs[`${name}-validator.js`] = '// Generated from contracts/openapi.json. Do not edit.\nimport { fullFormats as formats } from "ajv-formats/dist/formats.js";\n' + standaloneCode(ajv, validator);
   outputs[`${name}-validator.d.ts`] = "// Generated. Do not edit.\nexport default function validate(value: unknown): boolean;\n";
 }

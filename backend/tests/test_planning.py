@@ -112,7 +112,9 @@ def test_only_second_day_chicken_changes_and_base_stays_untouched():
     changed.meals[1].recipeId = "tofu-rice"
     changed.meals[1].recipeSnapshot = None
     proposal = validate_proposal(
-        ValidateProposalRequest(context=context(), base=base, candidate=changed)
+        ValidateProposalRequest(
+            context=context(), base=evaluate(base), candidate=changed
+        )
     )
     assert len(proposal.diff) == 1
     assert proposal.diff[0].key == MealKey(day="2026-10-02", slot="lunch")
@@ -130,7 +132,9 @@ def test_scope_and_lock_include_portion_and_reject_unauthorized_changes():
         changed.meals[index].quantity = Decimal(2)
         with pytest.raises(ValueError, match=message):
             validate_proposal(
-                ValidateProposalRequest(context=context(), base=base, candidate=changed)
+                ValidateProposalRequest(
+                    context=context(), base=evaluate(base), candidate=changed
+                )
             )
 
 
@@ -140,7 +144,9 @@ def test_tampered_controlled_source_is_rejected():
     changed.meals[0].recipeSnapshot.nutrients["kcal"].amount = 1
     with pytest.raises(ValueError, match="source snapshot"):
         validate_proposal(
-            ValidateProposalRequest(context=context(), base=base, candidate=changed)
+            ValidateProposalRequest(
+                context=context(), base=evaluate(base), candidate=changed
+            )
         )
 
 

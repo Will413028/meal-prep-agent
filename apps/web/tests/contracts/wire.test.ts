@@ -29,6 +29,12 @@ test("canonical planning HTTP response preserves numbers, null, UTC timestamps a
   expect(evaluation.days[0].day).toBe("2026-10-01");
   expect(typeof evaluation.days[0].nutrients.kcal.known).toBe("number");
   expect(evaluation.candidate.meals[0].recipeSnapshot?.storage).toBeNull();
+  expect(evaluation.shopping.items.length).toBeGreaterThan(0);
+  expect(typeof evaluation.shopping.items[0].toBuy).toBe("number");
+  expect(evaluation.prep.destinations).toHaveLength(9);
+  expect(evaluation.prep.destinations[0].storage).toBeNull();
+  expect(proposal.shoppingDiff.length).toBeGreaterThan(0);
+  expect(proposal.prepDiff.length).toBeGreaterThan(0);
   for (const mutate of [
     (value: typeof evaluation) => { delete value.days[0].nutrients.kcal; },
     (value: typeof evaluation) => { delete (value.candidate as Partial<typeof value.candidate>).schemaVersion; },
@@ -36,6 +42,9 @@ test("canonical planning HTTP response preserves numbers, null, UTC timestamps a
     (value: typeof evaluation) => { value.candidate.goal.confirmedAt = "not-a-date"; },
     (value: typeof evaluation) => { value.days[0].day = "2026-02-30"; },
     (value: typeof evaluation) => { value.days[0].nutrients.kcal.known = "2000" as unknown as number; },
+    (value: typeof evaluation) => { delete (value as Partial<typeof value>).shopping; },
+    (value: typeof evaluation) => { delete (value.prep as Partial<typeof value.prep>).sourceLabel; },
+    (value: typeof evaluation) => { value.prep.destinations[0].day = "2026-02-30"; },
   ]) {
     const corrupted = structuredClone(evaluation);
     mutate(corrupted);

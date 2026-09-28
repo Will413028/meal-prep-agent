@@ -40,9 +40,16 @@ def build_proposal(request: BuildProposalRequest) -> BuildProposalResult:
     if any(recipe_id not in catalog for recipe_id in request.replacements.values()):
         return failure("no_controlled_substitute")
     try:
-        base = evaluate(request.base).candidate if request.base else None
+        base = (
+            evaluate(request.base.candidate, request.base).candidate
+            if request.base
+            else None
+        )
     except ValueError:
         return failure("invalid_base")
+    pantry = (
+        request.pantry if request.pantry is not None else base.pantry if base else ()
+    )
     seeds = {(meal.day, meal.slot): meal for meal in base.meals} if base else {}
     fixed_keys = {(meal.day, meal.slot) for meal in request.fixedMeals}
     if len(fixed_keys) != len(request.fixedMeals):
@@ -63,6 +70,7 @@ def build_proposal(request: BuildProposalRequest) -> BuildProposalResult:
             PlanCandidate(
                 goal=request.goal,
                 constraints=request.constraints,
+                pantry=pantry,
                 meals=tuple(seeds.values()),
             )
         ).candidate
@@ -229,6 +237,7 @@ def build_proposal(request: BuildProposalRequest) -> BuildProposalResult:
                 candidate=PlanCandidate(
                     goal=request.goal,
                     constraints=request.constraints,
+                    pantry=pantry,
                     meals=tuple(
                         sorted(completed, key=lambda meal: (meal.day, meal.slot))
                     ),

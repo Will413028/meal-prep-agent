@@ -7,7 +7,7 @@
           "base": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PlanCandidate-Input"
+                "$ref": "#/components/schemas/Evaluation-Input"
               },
               {
                 "type": "null"
@@ -31,6 +31,21 @@
           },
           "goal": {
             "$ref": "#/components/schemas/ConfirmedGoal-Input"
+          },
+          "pantry": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PantryItem"
+                },
+                "maxItems": 128,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pantry"
           },
           "replacements": {
             "additionalProperties": {
@@ -121,12 +136,19 @@
             "type": "array"
           },
           "evaluation": {
-            "$ref": "#/components/schemas/Evaluation"
+            "$ref": "#/components/schemas/Evaluation-Output"
           },
           "planId": {
             "format": "uuid",
             "title": "Planid",
             "type": "string"
+          },
+          "prepDiff": {
+            "items": {
+              "$ref": "#/components/schemas/PrepDiff"
+            },
+            "title": "Prepdiff",
+            "type": "array"
           },
           "runId": {
             "format": "uuid",
@@ -147,6 +169,13 @@
             "title": "Sessiongeneration",
             "type": "string"
           },
+          "shoppingDiff": {
+            "items": {
+              "$ref": "#/components/schemas/ShoppingDiff"
+            },
+            "title": "Shoppingdiff",
+            "type": "array"
+          },
           "violations": {
             "default": [],
             "items": {
@@ -164,6 +193,8 @@
           "scope",
           "evaluation",
           "diff",
+          "shoppingDiff",
+          "prepDiff",
           "violations"
         ],
         "title": "CanonicalProposal",
@@ -357,11 +388,34 @@
         "title": "DailySummary",
         "type": "object"
       },
-      "Evaluation": {
+      "EvaluatePlanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Evaluation-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/PlanCandidate-Input"
+          }
+        },
+        "required": [
+          "candidate"
+        ],
+        "title": "EvaluatePlanRequest",
+        "type": "object"
+      },
+      "Evaluation-Input": {
         "additionalProperties": false,
         "properties": {
           "candidate": {
-            "$ref": "#/components/schemas/PlanCandidate-Output"
+            "$ref": "#/components/schemas/PlanCandidate-Input"
           },
           "days": {
             "items": {
@@ -369,6 +423,12 @@
             },
             "title": "Days",
             "type": "array"
+          },
+          "prep": {
+            "$ref": "#/components/schemas/PrepPlan-Input"
+          },
+          "shopping": {
+            "$ref": "#/components/schemas/ShoppingList"
           },
           "warnings": {
             "items": {
@@ -381,7 +441,46 @@
         "required": [
           "candidate",
           "days",
-          "warnings"
+          "warnings",
+          "shopping",
+          "prep"
+        ],
+        "title": "Evaluation",
+        "type": "object"
+      },
+      "Evaluation-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate": {
+            "$ref": "#/components/schemas/PlanCandidate-Output"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DailySummary"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "prep": {
+            "$ref": "#/components/schemas/PrepPlan-Output"
+          },
+          "shopping": {
+            "$ref": "#/components/schemas/ShoppingList"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "candidate",
+          "days",
+          "warnings",
+          "shopping",
+          "prep"
         ],
         "title": "Evaluation",
         "type": "object"
@@ -870,6 +969,76 @@
         "title": "NutrientSummary",
         "type": "object"
       },
+      "PantryItem": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "foodId": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Foodid",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "ge": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "specification": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Specification",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "raw",
+              "cooked",
+              "ready"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "g",
+              "kg",
+              "ml",
+              "l",
+              "piece"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "foodId",
+          "name",
+          "specification",
+          "state",
+          "unit",
+          "quantity",
+          "confirmed"
+        ],
+        "title": "PantryItem",
+        "type": "object"
+      },
       "PlanCandidate-Input": {
         "additionalProperties": false,
         "properties": {
@@ -904,6 +1073,15 @@
             "default": "nutrition-v1",
             "title": "Nutritionpolicyversion",
             "type": "string"
+          },
+          "pantry": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PantryItem"
+            },
+            "maxItems": 128,
+            "title": "Pantry",
+            "type": "array"
           },
           "schemaVersion": {
             "const": 1,
@@ -955,6 +1133,15 @@
             "title": "Nutritionpolicyversion",
             "type": "string"
           },
+          "pantry": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PantryItem"
+            },
+            "maxItems": 128,
+            "title": "Pantry",
+            "type": "array"
+          },
           "schemaVersion": {
             "const": 1,
             "default": 1,
@@ -969,7 +1156,8 @@
           "calculationVersion",
           "goal",
           "constraints",
-          "meals"
+          "meals",
+          "pantry"
         ],
         "title": "PlanCandidate",
         "type": "object"
@@ -1213,6 +1401,264 @@
           "equipment"
         ],
         "title": "PlanningConstraints",
+        "type": "object"
+      },
+      "PortionDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "recipeId": {
+            "title": "Recipeid",
+            "type": "string"
+          },
+          "reheating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reheating"
+          },
+          "slot": {
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ],
+            "title": "Slot",
+            "type": "string"
+          },
+          "storage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage"
+          },
+          "unit": {
+            "enum": [
+              "serving",
+              "g",
+              "ml",
+              "piece"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "day",
+          "slot",
+          "recipeId",
+          "quantity",
+          "unit",
+          "storage",
+          "reheating"
+        ],
+        "title": "PortionDestination",
+        "type": "object"
+      },
+      "PrepDiff": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrepStep"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrepStep"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "before",
+          "after"
+        ],
+        "title": "PrepDiff",
+        "type": "object"
+      },
+      "PrepPlan-Input": {
+        "additionalProperties": false,
+        "properties": {
+          "destinations": {
+            "items": {
+              "$ref": "#/components/schemas/PortionDestination"
+            },
+            "title": "Destinations",
+            "type": "array"
+          },
+          "sourceLabel": {
+            "const": "合成示範流程；時間為估計，非食品安全指引",
+            "default": "合成示範流程；時間為估計，非食品安全指引",
+            "title": "Sourcelabel",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PrepStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "totalMinutes": {
+            "minimum": 0.0,
+            "title": "Totalminutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "destinations",
+          "steps",
+          "totalMinutes"
+        ],
+        "title": "PrepPlan",
+        "type": "object"
+      },
+      "PrepPlan-Output": {
+        "additionalProperties": false,
+        "properties": {
+          "destinations": {
+            "items": {
+              "$ref": "#/components/schemas/PortionDestination"
+            },
+            "title": "Destinations",
+            "type": "array"
+          },
+          "sourceLabel": {
+            "const": "合成示範流程；時間為估計，非食品安全指引",
+            "default": "合成示範流程；時間為估計，非食品安全指引",
+            "title": "Sourcelabel",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PrepStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "totalMinutes": {
+            "minimum": 0.0,
+            "title": "Totalminutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "destinations",
+          "steps",
+          "totalMinutes",
+          "sourceLabel"
+        ],
+        "title": "PrepPlan",
+        "type": "object"
+      },
+      "PrepStep": {
+        "additionalProperties": false,
+        "properties": {
+          "checked": {
+            "title": "Checked",
+            "type": "boolean"
+          },
+          "dependsOn": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Dependson",
+            "type": "array"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "destinationId": {
+            "format": "uuid",
+            "title": "Destinationid",
+            "type": "string"
+          },
+          "endMinute": {
+            "exclusiveMinimum": 0.0,
+            "title": "Endminute",
+            "type": "integer"
+          },
+          "equipment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equipment"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "recipeStepId": {
+            "title": "Recipestepid",
+            "type": "string"
+          },
+          "startMinute": {
+            "minimum": 0.0,
+            "title": "Startminute",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "destinationId",
+          "recipeStepId",
+          "description",
+          "equipment",
+          "dependsOn",
+          "startMinute",
+          "endMinute",
+          "checked"
+        ],
+        "title": "PrepStep",
         "type": "object"
       },
       "ProposalContext": {
@@ -1483,13 +1929,158 @@
         "title": "RecipeStep",
         "type": "object"
       },
+      "ShoppingDiff": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShoppingItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "before": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShoppingItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "before",
+          "after"
+        ],
+        "title": "ShoppingDiff",
+        "type": "object"
+      },
+      "ShoppingItem": {
+        "additionalProperties": false,
+        "properties": {
+          "checked": {
+            "title": "Checked",
+            "type": "boolean"
+          },
+          "foodId": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Foodid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "pantryUsed": {
+            "title": "Pantryused",
+            "type": "number"
+          },
+          "required": {
+            "title": "Required",
+            "type": "number"
+          },
+          "requiresReconfirmation": {
+            "title": "Requiresreconfirmation",
+            "type": "boolean"
+          },
+          "specification": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Specification",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "raw",
+              "cooked",
+              "ready"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "toBuy": {
+            "title": "Tobuy",
+            "type": "number"
+          },
+          "unit": {
+            "enum": [
+              "g",
+              "kg",
+              "ml",
+              "l",
+              "piece"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "foodId",
+          "name",
+          "specification",
+          "state",
+          "unit",
+          "id",
+          "required",
+          "pantryUsed",
+          "toBuy",
+          "checked",
+          "requiresReconfirmation"
+        ],
+        "title": "ShoppingItem",
+        "type": "object"
+      },
+      "ShoppingList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShoppingItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "warnings"
+        ],
+        "title": "ShoppingList",
+        "type": "object"
+      },
       "ValidateProposalRequest": {
         "additionalProperties": false,
         "properties": {
           "base": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PlanCandidate-Input"
+                "$ref": "#/components/schemas/Evaluation-Input"
               },
               {
                 "type": "null"
@@ -1607,7 +2198,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlanCandidate-Input"
+                "$ref": "#/components/schemas/EvaluatePlanRequest"
               }
             }
           },
@@ -1618,7 +2209,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Evaluation"
+                  "$ref": "#/components/schemas/Evaluation-Output"
                 }
               }
             },

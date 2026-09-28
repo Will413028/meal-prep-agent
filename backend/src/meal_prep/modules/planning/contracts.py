@@ -14,7 +14,9 @@ from pydantic import (
 
 from meal_prep.modules.nutrition.contracts import Contract, GoalResult, JsonDecimal
 from meal_prep.modules.nutrition.totals import NutrientName
+from meal_prep.modules.prep.contracts import PrepPlan, PrepStep
 from meal_prep.modules.recipes.contracts import NutrientRecord, Recipe
+from meal_prep.modules.shopping.contracts import PantryItem, ShoppingItem, ShoppingList
 
 Slot = Literal["breakfast", "lunch", "dinner", "snack"]
 
@@ -135,6 +137,7 @@ class PlanCandidate(Contract):
     goal: ConfirmedGoal
     constraints: PlanningConstraints
     meals: tuple[PlannedMeal, ...] = Field(max_length=12)
+    pantry: tuple[PantryItem, ...] = Field(default=(), max_length=128)
 
 
 class ProposalContext(Contract):
@@ -164,6 +167,25 @@ class Evaluation(Contract):
     candidate: PlanCandidate
     days: tuple[DailySummary, ...]
     warnings: tuple[str, ...]
+    shopping: ShoppingList
+    prep: PrepPlan
+
+
+class EvaluatePlanRequest(Contract):
+    candidate: PlanCandidate
+    base: Evaluation | None = None
+
+
+class ShoppingDiff(Contract):
+    id: UUID
+    before: ShoppingItem | None
+    after: ShoppingItem | None
+
+
+class PrepDiff(Contract):
+    id: UUID
+    before: PrepStep | None
+    after: PrepStep | None
 
 
 class MealDiff(Contract):
@@ -178,20 +200,23 @@ class CanonicalProposal(ProposalContext):
     )
     evaluation: Evaluation
     diff: tuple[MealDiff, ...]
+    shoppingDiff: tuple[ShoppingDiff, ...]
+    prepDiff: tuple[PrepDiff, ...]
     violations: tuple[str, ...] = ()
 
 
 class ValidateProposalRequest(Contract):
     context: ProposalContext
-    base: PlanCandidate | None
+    base: Evaluation | None
     candidate: PlanCandidate
 
 
 class BuildProposalRequest(Contract):
     context: ProposalContext
-    base: PlanCandidate | None
+    base: Evaluation | None
     goal: ConfirmedGoal
     constraints: PlanningConstraints
+    pantry: tuple[PantryItem, ...] | None = Field(default=None, max_length=128)
     fixedMeals: tuple[PlannedMeal, ...] = Field(default=(), max_length=12)
     replacements: dict[str, str] = Field(default_factory=dict, max_length=12)
     searchBudget: int = Field(default=20000, ge=1, le=20000, strict=True)

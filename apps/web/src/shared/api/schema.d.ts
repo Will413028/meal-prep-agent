@@ -91,7 +91,7 @@ export interface components {
     schemas: {
         /** BuildProposalRequest */
         BuildProposalRequest: {
-            base: components["schemas"]["PlanCandidate-Input"] | null;
+            base: components["schemas"]["Evaluation-Input"] | null;
             constraints: components["schemas"]["PlanningConstraints"];
             context: components["schemas"]["ProposalContext"];
             /**
@@ -100,6 +100,8 @@ export interface components {
              */
             fixedMeals: components["schemas"]["PlannedMeal-Input"][];
             goal: components["schemas"]["ConfirmedGoal-Input"];
+            /** Pantry */
+            pantry?: components["schemas"]["PantryItem"][] | null;
             /** Replacements */
             replacements?: {
                 [key: string]: string;
@@ -129,12 +131,14 @@ export interface components {
             baseRevision: number;
             /** Diff */
             diff: components["schemas"]["MealDiff"][];
-            evaluation: components["schemas"]["Evaluation"];
+            evaluation: components["schemas"]["Evaluation-Output"];
             /**
              * Planid
              * Format: uuid
              */
             planId: string;
+            /** Prepdiff */
+            prepDiff: components["schemas"]["PrepDiff"][];
             /**
              * Runid
              * Format: uuid
@@ -147,6 +151,8 @@ export interface components {
              * Format: uuid
              */
             sessionGeneration: string;
+            /** Shoppingdiff */
+            shoppingDiff: components["schemas"]["ShoppingDiff"][];
             /**
              * Violations
              * @default []
@@ -239,11 +245,28 @@ export interface components {
             /** Withintargets */
             withinTargets: boolean | null;
         };
+        /** EvaluatePlanRequest */
+        EvaluatePlanRequest: {
+            base?: components["schemas"]["Evaluation-Input"] | null;
+            candidate: components["schemas"]["PlanCandidate-Input"];
+        };
         /** Evaluation */
-        Evaluation: {
+        "Evaluation-Input": {
+            candidate: components["schemas"]["PlanCandidate-Input"];
+            /** Days */
+            days: components["schemas"]["DailySummary"][];
+            prep: components["schemas"]["PrepPlan-Input"];
+            shopping: components["schemas"]["ShoppingList"];
+            /** Warnings */
+            warnings: string[];
+        };
+        /** Evaluation */
+        "Evaluation-Output": {
             candidate: components["schemas"]["PlanCandidate-Output"];
             /** Days */
             days: components["schemas"]["DailySummary"][];
+            prep: components["schemas"]["PrepPlan-Output"];
+            shopping: components["schemas"]["ShoppingList"];
             /** Warnings */
             warnings: string[];
         };
@@ -421,6 +444,29 @@ export interface components {
             /** Withintarget */
             withinTarget: boolean | null;
         };
+        /** PantryItem */
+        PantryItem: {
+            /** Confirmed */
+            confirmed: boolean;
+            /** Foodid */
+            foodId: string;
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity: number | null;
+            /** Specification */
+            specification: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "raw" | "cooked" | "ready";
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "g" | "kg" | "ml" | "l" | "piece";
+        };
         /** PlanCandidate */
         "PlanCandidate-Input": {
             /**
@@ -445,6 +491,11 @@ export interface components {
              * @constant
              */
             nutritionPolicyVersion: "nutrition-v1";
+            /**
+             * Pantry
+             * @default []
+             */
+            pantry: components["schemas"]["PantryItem"][];
             /**
              * Schemaversion
              * @default 1
@@ -476,6 +527,11 @@ export interface components {
              * @constant
              */
             nutritionPolicyVersion: "nutrition-v1";
+            /**
+             * Pantry
+             * @default []
+             */
+            pantry: components["schemas"]["PantryItem"][];
             /**
              * Schemaversion
              * @default 1
@@ -575,6 +631,104 @@ export interface components {
             /** Timelimitminutes */
             timeLimitMinutes?: number | null;
         };
+        /** PortionDestination */
+        PortionDestination: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Quantity */
+            quantity: number;
+            /** Recipeid */
+            recipeId: string;
+            /** Reheating */
+            reheating: string | null;
+            /**
+             * Slot
+             * @enum {string}
+             */
+            slot: "breakfast" | "lunch" | "dinner" | "snack";
+            /** Storage */
+            storage: string | null;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "serving" | "g" | "ml" | "piece";
+        };
+        /** PrepDiff */
+        PrepDiff: {
+            after: components["schemas"]["PrepStep"] | null;
+            before: components["schemas"]["PrepStep"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** PrepPlan */
+        "PrepPlan-Input": {
+            /** Destinations */
+            destinations: components["schemas"]["PortionDestination"][];
+            /**
+             * Sourcelabel
+             * @default 合成示範流程；時間為估計，非食品安全指引
+             * @constant
+             */
+            sourceLabel: "合成示範流程；時間為估計，非食品安全指引";
+            /** Steps */
+            steps: components["schemas"]["PrepStep"][];
+            /** Totalminutes */
+            totalMinutes: number;
+        };
+        /** PrepPlan */
+        "PrepPlan-Output": {
+            /** Destinations */
+            destinations: components["schemas"]["PortionDestination"][];
+            /**
+             * Sourcelabel
+             * @default 合成示範流程；時間為估計，非食品安全指引
+             * @constant
+             */
+            sourceLabel: "合成示範流程；時間為估計，非食品安全指引";
+            /** Steps */
+            steps: components["schemas"]["PrepStep"][];
+            /** Totalminutes */
+            totalMinutes: number;
+        };
+        /** PrepStep */
+        PrepStep: {
+            /** Checked */
+            checked: boolean;
+            /** Dependson */
+            dependsOn: string[];
+            /** Description */
+            description: string;
+            /**
+             * Destinationid
+             * Format: uuid
+             */
+            destinationId: string;
+            /** Endminute */
+            endMinute: number;
+            /** Equipment */
+            equipment: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Recipestepid */
+            recipeStepId: string;
+            /** Startminute */
+            startMinute: number;
+        };
         /** ProposalContext */
         ProposalContext: {
             /** Baserevision */
@@ -662,9 +816,60 @@ export interface components {
             /** Minutes */
             minutes: number;
         };
+        /** ShoppingDiff */
+        ShoppingDiff: {
+            after: components["schemas"]["ShoppingItem"] | null;
+            before: components["schemas"]["ShoppingItem"] | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** ShoppingItem */
+        ShoppingItem: {
+            /** Checked */
+            checked: boolean;
+            /** Foodid */
+            foodId: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Pantryused */
+            pantryUsed: number;
+            /** Required */
+            required: number;
+            /** Requiresreconfirmation */
+            requiresReconfirmation: boolean;
+            /** Specification */
+            specification: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "raw" | "cooked" | "ready";
+            /** Tobuy */
+            toBuy: number;
+            /**
+             * Unit
+             * @enum {string}
+             */
+            unit: "g" | "kg" | "ml" | "l" | "piece";
+        };
+        /** ShoppingList */
+        ShoppingList: {
+            /** Items */
+            items: components["schemas"]["ShoppingItem"][];
+            /** Warnings */
+            warnings: string[];
+        };
         /** ValidateProposalRequest */
         ValidateProposalRequest: {
-            base: components["schemas"]["PlanCandidate-Input"] | null;
+            base: components["schemas"]["Evaluation-Input"] | null;
             candidate: components["schemas"]["PlanCandidate-Input"];
             context: components["schemas"]["ProposalContext"];
         };
@@ -732,7 +937,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PlanCandidate-Input"];
+                "application/json": components["schemas"]["EvaluatePlanRequest"];
             };
         };
         responses: {
@@ -742,7 +947,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Evaluation"];
+                    "application/json": components["schemas"]["Evaluation-Output"];
                 };
             };
             /** @description Validation Error */

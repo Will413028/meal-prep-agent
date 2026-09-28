@@ -1,5 +1,20 @@
 import { expect, test } from "@playwright/test";
 
+test("probe waits for client hydration before accepting a click", async ({ page }) => {
+  let release!: () => void;
+  const scripts = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/*.js*", async route => { await scripts; await route.continue(); });
+  await page.goto("/", { waitUntil: "commit" });
+  const start = page.getByRole("button", { name: "測試 Agent 連線" });
+  try {
+    await expect(start).toBeVisible();
+    await expect(start).toBeDisabled();
+  } finally { release(); }
+  await expect(start).toBeEnabled();
+  await start.click();
+  await expect(page.getByTestId("probe-status")).toHaveText("合成工具往返完成；這不是可採用餐單。");
+});
+
 test("browser abort closes a real incremental stream through the fixed proxy", async ({ page }) => {
   await page.goto("/");
   const evidence = await page.evaluate(async () => {

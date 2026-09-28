@@ -1,6 +1,6 @@
 # Meal Prep Agent — TDD 實作計畫
 
-更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 最小整合、T04 domain、T05 提案已驗收。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
+更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 最小整合、T04 domain、T05 提案、T06 清單／備餐已驗收。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
 
 ## 1. 前提與接續方式
 
@@ -46,7 +46,7 @@
 | T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 已驗收（最小整合）：官方 HttpAgent／adapter、run token／取消、workerd SSE／中止、本地 D1 與一次 live；完整 K2/K3 留 T09/T11 |
 | T04 | T01、T03 可行性 | 食譜資料與營養計算 | 已驗收：受控合成資料、份量／來源、Decimal 小計／完整性與三種 mutation |
 | T05 | T04 | 三天提案、局部修改及硬限制 | 已驗收：有限搜尋／canonical API、scope／鎖定／來源、真 HTTP 跨語言契約 |
-| T06 | T05 | 購物、庫存與備餐衍生資料 | 未開始 |
+| T06 | T05 | 購物、庫存與備餐衍生資料 | 已驗收：庫存單次扣抵、勾選／衍生diff、設備序列與分裝、HTTP完整快照 |
 | T07 | T01、T05、T06 | D1／匿名身份、原子採用與清除 | 未開始 |
 | T08 | T02、T07 | 雙入口與手動操作完整切片 | 未開始 |
 | T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 未開始 |
@@ -260,3 +260,19 @@
 - Mutation：移除 scope／locked guard 均使測試紅，finally 還原，`.artifacts/t05-mutation-{scope,lock}.log`。與原始開發 RED 分開記錄。
 - 最終 Python `pytest backend/tests -q`：95 passed（`.artifacts/t05-python-final.log`）；Web 66 passed（`.artifacts/t05-web-final.log`）；契約 wire 為 2 個 Python producer＋2 個 TS consumer 測試。ruff、mypy、typecheck、contracts:check 通過；Next 與 vinext build 通過、workerd Playwright 10 passed（`.artifacts/t05-{next-build,worker-build,worker-e2e}.log`）。build／瀏覽器在最後純 Python 邊界修正前完成，修正後重跑 Python／契約／typecheck，未假稱重跑未受影響的瀏覽器。
 - 此階段交付 Python API 與可共用 use cases；購物／備餐由 T06、D1 採用由 T07、完整卡片流程由 T08、正式 tools 由 T09 接續。沒有將 Python canonical 驗證當成已保存或已核驗身份。
+
+
+### 2026-09-28 T06 採買、庫存與備餐
+
+- 前提核對：維持受控合成食譜、Decimal、純 application use cases，沒有保存或模型呼叫。consumer 盤點 `rg -n 'request.base|req.base|base=|Evaluation|CanonicalProposal' backend/src/meal_prep/modules/planning backend/tests/test_planning* apps/web/tests/contracts/wire.test.ts`（`.artifacts/t06-consumers.txt`）；清單需保留勾選，base 由 PlanCandidate 升為完整 Evaluation，所有 producer／consumer 同步，目前尚未部署，不需維持舊的裸 candidate 請求相容層。
+- `test_shopping.py`：合併後單次扣庫存、刪餐不為負、生熟／規格／g對ml隔離先 2 個 assertion RED；第三個空介面結果原為 IndexError，不列業務 RED，補明確數量 assertion 並重現初始 stub RED 後回 GREEN（`.artifacts/t06-shopping-corrected-red.log`）。確認的 kg→g、l→ml 庫存才扣抵；未知／未確認數量保留 warning。相容單位的重複庫存 key 拒絕，防止重複扣抵。
+- 勾選：增加需要量或剩餘採買量，原已勾項需重新確認；未受影響與減量保留。`test_shopping.py` 1 failed → GREEN，重算不得抹除未確認提示另 1 failed → GREEN（`.artifacts/t06-shopping-checks-red.log`、`t06-reconfirm-red.log`）。只有 key／需求內容影響採買狀態，不修改輸入快照。
+- `test_portion_ingredients.py`：1.5份雞肉飯獨立期望270g雞／150g米／180g菜，先空結果 assertion RED → GREEN。採買只收已展開自煮食材；external 仍計營養但沒有採买或料理步驟。
+- `test_prep.py`：缺步驟與缺設備兩個 RED → GREEN；依食譜前置關係及各設備時間安排，同設備不重疊，無設備的準備工作也序列。保留每份對应日期／餐次／實際份量，未知保存／復熱為null、時間明示合成估計。未臆測設備容量或將跨餐數量當成一鍋可同時完成。份量變更只取消該餐步驟勾選，1 failed → GREEN。
+- 完整衍生快照：evaluate 回購物／prep，proposal 含 shoppingDiff／prepDiff；API 缺公開欄位 assertion RED → GREEN。搜尋省略 pantry 代表沿用base，明確空陣列代表清空；原本意外清空造成scope拒絕，1 failed → GREEN（`.artifacts/t06-preserve-stock-red.log`）。pantry 變更仍須全餐 scope。
+- 設計審查1項採「改」：從營養adapter抽出 `validate_recipe_portion`，營養／採買／prep 共用驗證，複查解除。correctness 1項採「改」：evaluate HTTP 原無法收base導致勾選重置；改為 EvaluatePlanRequest(candidate,base)，先重算base再計算候選。不變／增加份量兩個真HTTP RED → GREEN（`.artifacts/t06-evaluate-checks-red.log`）；consumer 搜尋及結果在 `.artifacts/t06-evaluate-consumers.txt`。
+- 契約 gate 曾因 Pydantic 產生 Evaluation-Input/Output 而 missingRef，記 schema integration RED，非業務 RED。generator 改由 API 200 response 取得 schema，TS wrapper 同樣引用 paths response，不依賴 component 命名；產物由固定工具重新生成。wire 額外驗採買數字、9份分裝、null保存、衍生diff、缺清單／缺合成標示／非法日期拒絕。
+- Mutation：庫存扣抵倍增與移除設備可用時間，各使對應 assertion 紅；finally還原（`.artifacts/t06-mutation-{stock,equipment}.log`）。未將 mutation 冒稱開發 RED。
+- workerd 回歸曾1 failed／9 passed，probe按鈕點擊後仍是初始狀態；原案例單項重跑3次通過，不能宣稱已定位。另以延遲JavaScript的barrier獨立重現 hydration前按鈕可點（expected disabled/received enabled）；新增ready門檻，僅hydration後啟用（`.artifacts/t06-hydration-red.log`）。不以增加timeout隱藏失敗。
+
+- 最終驗證：`uv run --project backend --frozen pytest backend/tests -q` 109 passed（`.artifacts/t06-python-final.log`）；`pnpm test:web` 66 passed；`pnpm test:contracts` Python producer 2＋TS wire 2 passed，contracts:check／ruff／mypy／typecheck 通過。Next build、vinext build 通過，`MEAL_TEST_WORKER=1 pnpm test:e2e` 11 passed（`.artifacts/t06-worker-e2e-final.log`），包含新增 hydration barrier。獨立複查確認 evaluate 契約 consumer 全部同步。尚無保存或完整操作 UI，不將 T06 純計算驗收等同 T07/T08。

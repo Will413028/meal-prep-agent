@@ -9,9 +9,15 @@ from meal_prep.modules.nutrition.totals import (
     NutrientValue,
     calculate_day,
 )
-from meal_prep.modules.recipes.application import recipe_meal
+from meal_prep.modules.prep.application import prep_plan
+from meal_prep.modules.recipes.application import (
+    RecipePortion,
+    portion_ingredients,
+    recipe_meal,
+)
 from meal_prep.modules.recipes.catalog import load_catalog
 from meal_prep.modules.recipes.contracts import Recipe
+from meal_prep.modules.shopping.application import shopping_list
 
 from .contracts import (
     CanonicalProposal,
@@ -23,6 +29,8 @@ from .contracts import (
     PlanCandidate,
     PlannedMeal,
     PlanningConstraints,
+    PrepDiff,
+    ShoppingDiff,
     ValidateProposalRequest,
 )
 
@@ -47,8 +55,11 @@ def meal_nutrition(meal: PlannedMeal, catalog: dict[str, Recipe]) -> MealNutriti
 
 
 def validate_proposal(request: ValidateProposalRequest) -> CanonicalProposal:
-    evaluation = evaluate(request.candidate)
-    base = evaluate(request.base).candidate if request.base else None
+    base_state = (
+        evaluate(request.base.candidate, request.base) if request.base else None
+    )
+    evaluation = evaluate(request.candidate, base_state)
+    base = base_state.candidate if base_state else None
     old = {(meal.day, meal.slot): meal for meal in base.meals} if base else {}
     new = {(meal.day, meal.slot): meal for meal in evaluation.candidate.meals}
     scope = {(key.day, key.slot) for key in request.context.scope}
@@ -62,6 +73,7 @@ def validate_proposal(request: ValidateProposalRequest) -> CanonicalProposal:
     if base and (
         base.goal != evaluation.candidate.goal
         or base.constraints != evaluation.candidate.constraints
+        or base.pantry != evaluation.candidate.pantry
     ):
         all_keys = (
             {
@@ -92,8 +104,28 @@ def validate_proposal(request: ValidateProposalRequest) -> CanonicalProposal:
         for value in day.nutrients.values()
     ):
         raise ValueError("known full-day nutrition outside target")
+    old_shopping = (
+        {item.id: item for item in base_state.shopping.items} if base_state else {}
+    )
+    new_shopping = {item.id: item for item in evaluation.shopping.items}
+    old_prep = {item.id: item for item in base_state.prep.steps} if base_state else {}
+    new_prep = {item.id: item for item in evaluation.prep.steps}
     return CanonicalProposal(
-        **request.context.model_dump(), evaluation=evaluation, diff=tuple(diff)
+        **request.context.model_dump(),
+        evaluation=evaluation,
+        diff=tuple(diff),
+        shoppingDiff=tuple(
+            ShoppingDiff(
+                id=key, before=old_shopping.get(key), after=new_shopping.get(key)
+            )
+            for key in sorted(old_shopping.keys() | new_shopping.keys())
+            if old_shopping.get(key) != new_shopping.get(key)
+        ),
+        prepDiff=tuple(
+            PrepDiff(id=key, before=old_prep.get(key), after=new_prep.get(key))
+            for key in sorted(old_prep.keys() | new_prep.keys())
+            if old_prep.get(key) != new_prep.get(key)
+        ),
     )
 
 
@@ -115,7 +147,9 @@ def recipe_allowed(recipe: Recipe, constraints: PlanningConstraints) -> bool:
     )
 
 
-def evaluate(candidate: PlanCandidate) -> Evaluation:
+def evaluate(
+    candidate: PlanCandidate, previous: Evaluation | None = None
+) -> Evaluation:
     canonical = candidate.model_copy(deep=True)
     goal = validate_goal(
         GoalRequest(schemaVersion=1, **canonical.goal.requested.model_dump())
@@ -181,4 +215,25 @@ def evaluate(candidate: PlanCandidate) -> Evaluation:
                 withinTargets=total.within_targets,
             )
         )
-    return Evaluation(candidate=canonical, days=tuple(days), warnings=tuple(warnings))
+    portions = tuple(
+        RecipePortion(meal.recipeSnapshot, meal.day, meal.slot, meal.quantity)
+        for meal in canonical.meals
+        if meal.recipeSnapshot is not None
+    )
+    shopping = shopping_list(
+        tuple(item for portion in portions for item in portion_ingredients(portion)),
+        canonical.pantry,
+        previous.shopping.items if previous else (),
+    )
+    prep = prep_plan(
+        portions,
+        canonical.constraints.equipment,
+        previous.prep.steps if previous else (),
+    )
+    return Evaluation(
+        candidate=canonical,
+        days=tuple(days),
+        warnings=tuple(warnings),
+        shopping=shopping,
+        prep=prep,
+    )

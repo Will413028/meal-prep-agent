@@ -10,10 +10,14 @@ def test_evaluate_http_serializes_dates_numbers_null_and_source_snapshots():
     with TestClient(create_app()) as client:
         response = client.post(
             "/api/v1/plans/evaluate",
-            json=candidate((chicken(),)).model_dump(mode="json"),
+            json={
+                "candidate": candidate((chicken(),)).model_dump(mode="json"),
+                "base": None,
+            },
         )
     assert response.status_code == 200, response.text
     data = response.json()
+    assert "shopping" in data and "prep" in data
     assert data["days"][0]["day"] == "2026-10-01"
     assert data["days"][0]["nutrients"]["kcal"]["known"] == 700
     assert data["days"][0]["nutrients"]["kcal"]["withinTarget"] is None
@@ -59,7 +63,9 @@ def test_public_contract_rejects_coerced_versions_and_invalid_calendar_windows(
     )
     target[field] = value
     with TestClient(create_app(), raise_server_exceptions=False) as client:
-        response = client.post("/api/v1/plans/evaluate", json=body)
+        response = client.post(
+            "/api/v1/plans/evaluate", json={"candidate": body, "base": None}
+        )
     assert response.status_code == 422, response.text
 
 
@@ -101,7 +107,11 @@ def test_external_numbers_that_cannot_round_trip_fail_without_a_server_error(
             },
         }
     ]
-    raw = json.dumps(body).replace('"AMOUNT"', amount).replace('"BASIS"', basis)
+    raw = (
+        json.dumps({"candidate": body, "base": None})
+        .replace('"AMOUNT"', amount)
+        .replace('"BASIS"', basis)
+    )
     with TestClient(create_app(), raise_server_exceptions=False) as client:
         response = client.post(
             "/api/v1/plans/evaluate",

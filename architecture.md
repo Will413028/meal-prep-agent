@@ -136,7 +136,7 @@ DRI 係數及 golden fixtures 以版本化政策資料維護，Web 由該資料�
 |---|---|
 | `GET /health` | 技術健康狀態，不包含使用者內容或模型呼叫 |
 | `POST /api/v1/goals/validate` | 驗證明確輸入的營養目標草稿並回傳範圍；不接收身體問卷、不保存、不自動確認 |
-| `POST /api/v1/plans/evaluate` | 不呼叫模型的餐單重算；用於調份量及恢復後驗證 |
+| `POST /api/v1/plans/evaluate` | 接收 candidate 與可選完整 base Evaluation；不呼叫模型地重算，保留未受影響勾選，用於調份量及恢復後驗證 |
 | `POST /api/v1/proposals/build` | 不呼叫模型的有限搜尋，卡片與 Agent 共用 build_proposal；回候選或具體未找到原因，不保存 |
 | `POST /api/v1/proposals/validate` | 重算、檢查 scope／鎖定及來源，回 canonical proposal；只回 canonical candidate，不直接寫 D1 |
 | `POST /agent` | request-scoped PydanticAI run，透過官方 AGUIAdapter 串流 |

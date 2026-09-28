@@ -18,7 +18,7 @@ def test_scoped_replacement_changes_only_second_day_and_never_overrides_locks():
     before = base.model_dump_json()
     req = BuildProposalRequest(
         context=context(),
-        base=base,
+        base=evaluate(base),
         goal=base.goal,
         constraints=base.constraints,
         replacements={"2026-10-02:lunch": "tofu-rice"},
@@ -28,7 +28,7 @@ def test_scoped_replacement_changes_only_second_day_and_never_overrides_locks():
     assert len(result.proposal.diff) == 1
     assert result.proposal.diff[0].after.recipeId == "tofu-rice"
     assert base.model_dump_json() == before
-    base.meals[1].locked = True
+    req.base.candidate.meals[1].locked = True
     assert build_proposal(req).reason == "locked_scope_conflict"
 
 
@@ -110,7 +110,8 @@ def test_equipment_and_missing_controlled_substitute_have_distinct_reasons():
 
 def test_duplicate_base_or_fixed_meals_are_rejected_before_key_indexing():
     req = request()
-    req.base = candidate((chicken(), chicken()))
+    req.base = evaluate(candidate((chicken(),)))
+    req.base.candidate.meals = (chicken(), chicken())
     assert build_proposal(req).reason == "invalid_base"
     req = request()
     req.fixedMeals = (chicken(), chicken())
@@ -156,7 +157,7 @@ def test_unlocked_external_allows_an_explicit_scoped_replacement():
     base.constraints.slots = ("lunch",)
     req = BuildProposalRequest(
         context=context(),
-        base=base,
+        base=evaluate(base),
         goal=base.goal,
         constraints=base.constraints,
         replacements={"2026-10-02:lunch": "tofu-rice"},

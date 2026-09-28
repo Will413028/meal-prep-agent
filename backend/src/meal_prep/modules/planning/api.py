@@ -7,8 +7,8 @@ from .contracts import (
     BuildProposalRequest,
     BuildProposalResult,
     CanonicalProposal,
+    EvaluatePlanRequest,
     Evaluation,
-    PlanCandidate,
     ValidateProposalRequest,
 )
 from .search import build_proposal
@@ -17,9 +17,10 @@ router = APIRouter(prefix="/api/v1", tags=["planning"], route_class=DecimalJSONR
 
 
 @router.post("/plans/evaluate", response_model=Evaluation)
-def evaluate_plan(request: PlanCandidate) -> Evaluation:
+def evaluate_plan(request: EvaluatePlanRequest) -> Evaluation:
     try:
-        return evaluate(request)
+        base = evaluate(request.base.candidate, request.base) if request.base else None
+        return evaluate(request.candidate, base)
     except ValueError as error:
         raise HTTPException(
             status_code=422, detail={"code": "invalid_plan", "message": str(error)}
