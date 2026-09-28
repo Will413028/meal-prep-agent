@@ -11,6 +11,7 @@ from test_planning_agent import payload
 
 from meal_prep.bootstrap.app import create_app
 from meal_prep.modules.planning.agents import api
+from meal_prep.platform import sse
 from meal_prep.platform.sse import with_heartbeat
 
 
@@ -139,6 +140,38 @@ def test_source_deadline_keeps_its_task_across_frames() -> None:
         finally:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
+def test_heartbeat_timeout_does_not_hide_queued_source_error(monkeypatch) -> None:
+    real_wait_for = asyncio.wait_for
+    waits = 0
+
+    async def expire_second_wait(awaitable, *, timeout):
+        nonlocal waits
+        waits += 1
+        if waits == 2:
+            await asyncio.sleep(0.01)
+            awaitable.close()
+            raise TimeoutError
+        return await real_wait_for(awaitable, timeout=timeout)
+
+    monkeypatch.setattr(sse.asyncio, "wait_for", expire_second_wait)
+
+    async def scenario() -> None:
+        async def source() -> AsyncIterator[bytes]:
+            yield b"data: first\n\n"
+            raise RuntimeError("source failed")
+
+        response = with_heartbeat(StreamingResponse(source()), interval=0.005)
+        try:
+            async for _ in response.body_iterator:
+                pass
+        except RuntimeError as error:
+            assert str(error) == "source failed"
+        else:
+            raise AssertionError("heartbeat timeout hid the queued source error")
 
     asyncio.run(scenario())
 

@@ -46,7 +46,9 @@ def with_heartbeat(
                 except TimeoutError:
                     if producer.done():
                         await producer
-                        return
+                        if queue.empty():
+                            return
+                        continue
                     yield b": keepalive\n\n"
                     continue
                 if frame is None:
