@@ -1,0 +1,700 @@
+{
+  "version": "recipes-v1",
+  "recipes": [
+    {
+      "id": "oat-yogurt",
+      "name": "燕麥優格杯",
+      "sourceLabel": "合成展示食譜，營養與成本非實測",
+      "basisQuantity": 1,
+      "basisUnit": "serving",
+      "portionMinimum": 0.5,
+      "portionMaximum": 2,
+      "portionIncrement": 0.25,
+      "mealSlots": [
+        "breakfast",
+        "snack"
+      ],
+      "ingredients": [
+        {
+          "foodId": "oats",
+          "name": "燕麥",
+          "quantity": 60,
+          "state": "ready",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "yogurt",
+          "name": "優格",
+          "quantity": 200,
+          "state": "ready",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        }
+      ],
+      "nutrients": {
+        "kcal": {
+          "amount": 400,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 20,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 55,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 11,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      },
+      "equipment": [],
+      "dietaryTags": [
+        "vegetarian"
+      ],
+      "steps": [
+        {
+          "id": "prepare",
+          "description": "依食材清單量取並整理食材（合成示範步驟）",
+          "minutes": 5,
+          "equipment": null,
+          "dependsOn": []
+        },
+        {
+          "id": "cook",
+          "description": "依食材適用方式料理並分裝（合成流程，非食品安全指引）",
+          "minutes": 3,
+          "equipment": null,
+          "dependsOn": [
+            "prepare"
+          ]
+        }
+      ],
+      "storage": null,
+      "reheating": null,
+      "cost": null
+    },
+    {
+      "id": "whole-eggs",
+      "name": "水煮蛋組合",
+      "sourceLabel": "合成展示食譜，營養與成本非實測",
+      "basisQuantity": 1,
+      "basisUnit": "serving",
+      "portionMinimum": 1,
+      "portionMaximum": 2,
+      "portionIncrement": 1,
+      "mealSlots": [
+        "breakfast",
+        "snack"
+      ],
+      "ingredients": [
+        {
+          "foodId": "egg",
+          "name": "雞蛋",
+          "quantity": 4,
+          "state": "raw",
+          "unit": "piece",
+          "specification": "standard",
+          "increment": 1
+        }
+      ],
+      "nutrients": {
+        "kcal": {
+          "amount": 300,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 24,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 2,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 21,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      },
+      "equipment": [
+        "rice_cooker"
+      ],
+      "dietaryTags": [
+        "vegetarian"
+      ],
+      "steps": [
+        {
+          "id": "prepare",
+          "description": "依食材清單量取並整理食材（合成示範步驟）",
+          "minutes": 5,
+          "equipment": null,
+          "dependsOn": []
+        },
+        {
+          "id": "cook",
+          "description": "依食材適用方式料理並分裝（合成流程，非食品安全指引）",
+          "minutes": 15,
+          "equipment": "rice_cooker",
+          "dependsOn": [
+            "prepare"
+          ]
+        }
+      ],
+      "storage": null,
+      "reheating": null,
+      "cost": null
+    },
+    {
+      "id": "chicken-rice",
+      "name": "雞肉飯盒",
+      "sourceLabel": "合成展示食譜，營養與成本非實測",
+      "basisQuantity": 1,
+      "basisUnit": "serving",
+      "portionMinimum": 0.5,
+      "portionMaximum": 2,
+      "portionIncrement": 0.25,
+      "mealSlots": [
+        "lunch",
+        "dinner"
+      ],
+      "ingredients": [
+        {
+          "foodId": "chicken",
+          "name": "雞胸肉",
+          "quantity": 180,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "rice",
+          "name": "白米",
+          "quantity": 100,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "broccoli",
+          "name": "青花菜",
+          "quantity": 120,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        }
+      ],
+      "nutrients": {
+        "kcal": {
+          "amount": 700,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 45,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 90,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 18,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      },
+      "equipment": [
+        "rice_cooker"
+      ],
+      "dietaryTags": [],
+      "steps": [
+        {
+          "id": "prepare",
+          "description": "依食材清單量取並整理食材（合成示範步驟）",
+          "minutes": 5,
+          "equipment": null,
+          "dependsOn": []
+        },
+        {
+          "id": "cook",
+          "description": "依食材適用方式料理並分裝（合成流程，非食品安全指引）",
+          "minutes": 15,
+          "equipment": "rice_cooker",
+          "dependsOn": [
+            "prepare"
+          ]
+        }
+      ],
+      "storage": null,
+      "reheating": null,
+      "cost": null
+    },
+    {
+      "id": "tofu-rice",
+      "name": "豆腐飯盒",
+      "sourceLabel": "合成展示食譜，營養與成本非實測",
+      "basisQuantity": 1,
+      "basisUnit": "serving",
+      "portionMinimum": 0.5,
+      "portionMaximum": 2,
+      "portionIncrement": 0.25,
+      "mealSlots": [
+        "lunch",
+        "dinner"
+      ],
+      "ingredients": [
+        {
+          "foodId": "tofu",
+          "name": "板豆腐",
+          "quantity": 250,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "rice",
+          "name": "白米",
+          "quantity": 100,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "broccoli",
+          "name": "青花菜",
+          "quantity": 150,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        }
+      ],
+      "nutrients": {
+        "kcal": {
+          "amount": 650,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 30,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 90,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 19,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      },
+      "equipment": [
+        "rice_cooker"
+      ],
+      "dietaryTags": [
+        "vegan",
+        "vegetarian"
+      ],
+      "steps": [
+        {
+          "id": "prepare",
+          "description": "依食材清單量取並整理食材（合成示範步驟）",
+          "minutes": 5,
+          "equipment": null,
+          "dependsOn": []
+        },
+        {
+          "id": "cook",
+          "description": "依食材適用方式料理並分裝（合成流程，非食品安全指引）",
+          "minutes": 15,
+          "equipment": "rice_cooker",
+          "dependsOn": [
+            "prepare"
+          ]
+        }
+      ],
+      "storage": null,
+      "reheating": null,
+      "cost": null
+    },
+    {
+      "id": "bean-bowl",
+      "name": "豆類米飯碗",
+      "sourceLabel": "合成展示食譜，營養與成本非實測",
+      "basisQuantity": 1,
+      "basisUnit": "serving",
+      "portionMinimum": 0.5,
+      "portionMaximum": 2,
+      "portionIncrement": 0.25,
+      "mealSlots": [
+        "lunch",
+        "dinner"
+      ],
+      "ingredients": [
+        {
+          "foodId": "beans",
+          "name": "熟豆",
+          "quantity": 200,
+          "state": "cooked",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "rice",
+          "name": "熟飯",
+          "quantity": 200,
+          "state": "cooked",
+          "unit": "g",
+          "specification": "cooked-white",
+          "increment": 0.1
+        },
+        {
+          "foodId": "carrot",
+          "name": "胡蘿蔔",
+          "quantity": 100,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        }
+      ],
+      "nutrients": {
+        "kcal": {
+          "amount": 600,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 25,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 100,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 11,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      },
+      "equipment": [
+        "rice_cooker"
+      ],
+      "dietaryTags": [
+        "vegan",
+        "vegetarian"
+      ],
+      "steps": [
+        {
+          "id": "prepare",
+          "description": "依食材清單量取並整理食材（合成示範步驟）",
+          "minutes": 5,
+          "equipment": null,
+          "dependsOn": []
+        },
+        {
+          "id": "cook",
+          "description": "依食材適用方式料理並分裝（合成流程，非食品安全指引）",
+          "minutes": 15,
+          "equipment": "rice_cooker",
+          "dependsOn": [
+            "prepare"
+          ]
+        }
+      ],
+      "storage": null,
+      "reheating": null,
+      "cost": null
+    },
+    {
+      "id": "salmon-rice",
+      "name": "鮭魚飯盒",
+      "sourceLabel": "合成展示食譜，營養與成本非實測",
+      "basisQuantity": 1,
+      "basisUnit": "serving",
+      "portionMinimum": 0.5,
+      "portionMaximum": 2,
+      "portionIncrement": 0.25,
+      "mealSlots": [
+        "lunch",
+        "dinner"
+      ],
+      "ingredients": [
+        {
+          "foodId": "salmon",
+          "name": "鮭魚",
+          "quantity": 180,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "rice",
+          "name": "熟飯",
+          "quantity": 250,
+          "state": "cooked",
+          "unit": "g",
+          "specification": "cooked-white",
+          "increment": 0.1
+        },
+        {
+          "foodId": "broccoli",
+          "name": "青花菜",
+          "quantity": 100,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        }
+      ],
+      "nutrients": {
+        "kcal": {
+          "amount": 750,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 40,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 85,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 27,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      },
+      "equipment": [
+        "pan"
+      ],
+      "dietaryTags": [],
+      "steps": [
+        {
+          "id": "prepare",
+          "description": "依食材清單量取並整理食材（合成示範步驟）",
+          "minutes": 5,
+          "equipment": null,
+          "dependsOn": []
+        },
+        {
+          "id": "cook",
+          "description": "依食材適用方式料理並分裝（合成流程，非食品安全指引）",
+          "minutes": 15,
+          "equipment": "pan",
+          "dependsOn": [
+            "prepare"
+          ]
+        }
+      ],
+      "storage": null,
+      "reheating": null,
+      "cost": null
+    },
+    {
+      "id": "soy-oats",
+      "name": "豆漿燕麥",
+      "sourceLabel": "合成展示食譜，營養與成本非實測",
+      "basisQuantity": 1,
+      "basisUnit": "serving",
+      "portionMinimum": 0.5,
+      "portionMaximum": 2,
+      "portionIncrement": 0.25,
+      "mealSlots": [
+        "breakfast",
+        "snack"
+      ],
+      "ingredients": [
+        {
+          "foodId": "oats",
+          "name": "燕麥",
+          "quantity": 70,
+          "state": "ready",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "soy-milk",
+          "name": "豆漿",
+          "quantity": 300,
+          "state": "ready",
+          "unit": "ml",
+          "specification": "standard",
+          "increment": 0.1
+        }
+      ],
+      "nutrients": {
+        "kcal": {
+          "amount": 450,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 22,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 65,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 12,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      },
+      "equipment": [
+        "rice_cooker"
+      ],
+      "dietaryTags": [
+        "vegan",
+        "vegetarian"
+      ],
+      "steps": [
+        {
+          "id": "prepare",
+          "description": "依食材清單量取並整理食材（合成示範步驟）",
+          "minutes": 5,
+          "equipment": null,
+          "dependsOn": []
+        },
+        {
+          "id": "cook",
+          "description": "依食材適用方式料理並分裝（合成流程，非食品安全指引）",
+          "minutes": 15,
+          "equipment": "rice_cooker",
+          "dependsOn": [
+            "prepare"
+          ]
+        }
+      ],
+      "storage": null,
+      "reheating": null,
+      "cost": null
+    },
+    {
+      "id": "chicken-noodles",
+      "name": "雞肉麵",
+      "sourceLabel": "合成展示食譜，營養與成本非實測",
+      "basisQuantity": 1,
+      "basisUnit": "serving",
+      "portionMinimum": 0.5,
+      "portionMaximum": 2,
+      "portionIncrement": 0.25,
+      "mealSlots": [
+        "lunch",
+        "dinner"
+      ],
+      "ingredients": [
+        {
+          "foodId": "chicken",
+          "name": "雞胸肉",
+          "quantity": 160,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "noodles",
+          "name": "乾麵",
+          "quantity": 100,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        },
+        {
+          "foodId": "carrot",
+          "name": "胡蘿蔔",
+          "quantity": 100,
+          "state": "raw",
+          "unit": "g",
+          "specification": "standard",
+          "increment": 0.1
+        }
+      ],
+      "nutrients": {
+        "kcal": {
+          "amount": 650,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 42,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 85,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 16,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      },
+      "equipment": [
+        "pot"
+      ],
+      "dietaryTags": [],
+      "steps": [
+        {
+          "id": "prepare",
+          "description": "依食材清單量取並整理食材（合成示範步驟）",
+          "minutes": 5,
+          "equipment": null,
+          "dependsOn": []
+        },
+        {
+          "id": "cook",
+          "description": "依食材適用方式料理並分裝（合成流程，非食品安全指引）",
+          "minutes": 15,
+          "equipment": "pot",
+          "dependsOn": [
+            "prepare"
+          ]
+        }
+      ],
+      "storage": null,
+      "reheating": null,
+      "cost": null
+    }
+  ]
+}

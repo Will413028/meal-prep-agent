@@ -4,7 +4,7 @@
 
 ## 目前狀態
 
-已確認 MVP 產品方向、只用免費模型額度，並允許使用 Cloudflare。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 比較選型、定義模組／資料流及整合驗證。已依參考專案選定 Next.js＋FastAPI／PydanticAI；部署組合仍須實測。目前已有可執行 Web／Python 骨架、目標驗證 API、生成契約與本機估算表單；T00–T02 的部分案例已完成 RED／GREEN，T03 已驗證官方 HttpAgent／AGUIAdapter、run token／取消與 workerd 最小整合。尚未完成配餐、D1 保存或部署，完整 gates 尚未驗收。
+已確認 MVP 產品方向、只用免費模型額度，並允許使用 Cloudflare。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 比較選型、定義模組／資料流及整合驗證。已依參考專案選定 Next.js＋FastAPI／PydanticAI；部署組合仍須實測。目前已有可執行 Web／Python 骨架、目標驗證 API、生成契約與本機估算表單；T00–T02 的部分案例已完成 RED／GREEN，T03 已驗證官方 HttpAgent／AGUIAdapter、run token／取消與 workerd 最小整合。T04 已有隨 Python 封裝的受控合成食譜及營養／份量計算；尚未完成配餐搜尋、D1 保存或部署，完整 gates 尚未驗收。
 
 ## MVP 範圍
 

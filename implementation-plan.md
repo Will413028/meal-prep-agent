@@ -1,6 +1,6 @@
 # Meal Prep Agent — TDD 實作計畫
 
-更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 最小整合已驗收。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
+更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 最小整合、T04 domain 已驗收。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
 
 ## 1. 前提與接續方式
 
@@ -41,10 +41,10 @@
 | 項目 | 依賴 | 交付結果 | 狀態 |
 |---|---|---|---|
 | T00 | 無 | 可執行測試環境、封裝、基本 CI | 已驗收（本機）：封裝／測試／build；CI 定義已建立，遠端執行於 T12 核對 |
-| T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 部分 GREEN：目標 API／生成契約；Worker DTO、日期與餐單比較待補 |
+| T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 部分 GREEN：目標 API／生成契約；Worker DTO／日期待補；餐單原值比較於 T04 已驗 |
 | T02 | T01 | 本機身體估算及確認邊界 | 部分 GREEN：八列估算／表單／確認；本機 metadata／鄰級比較已補，保存契約與全路徑隱私 gate 待補 |
 | T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 已驗收（最小整合）：官方 HttpAgent／adapter、run token／取消、workerd SSE／中止、本地 D1 與一次 live；完整 K2/K3 留 T09/T11 |
-| T04 | T01、T03 可行性 | 食譜資料與營養計算 | 未開始 |
+| T04 | T01、T03 可行性 | 食譜資料與營養計算 | 已驗收：受控合成資料、份量／來源、Decimal 小計／完整性與三種 mutation |
 | T05 | T04 | 三天提案、局部修改及硬限制 | 未開始 |
 | T06 | T05 | 購物、庫存與備餐衍生資料 | 未開始 |
 | T07 | T01、T05、T06 | D1／匿名身份、原子採用與清除 | 未開始 |
@@ -236,3 +236,14 @@
 - 最終 gate：Python 45 passed（`.artifacts/t03-python.log`）、Vitest 66 passed（`.artifacts/http-agent-web-final.log`）、typecheck／ruff／mypy 通過，vinext build 後 workerd Playwright 10 passed（`.artifacts/http-agent-worker-{build,e2e}.log`）。Node 10 passed 在測試 bare-finish fixture 補齊 RUN_STARTED 前完成；正式 fixture 補齊後於 workerd 重驗。
 - 相容性邊界：HttpAgent 1.0.0 對 CRLF fixture 解析失敗（`.artifacts/http-agent-web.log`）；目前固定官方 AGUIAdapter 實際輸出 LF，proxy 原樣轉送，最終驗證使用同一 LF 協定。未宣稱一般 SSE CRLF 相容；更換 producer／換行格式前必須先補其相容性驗證，不以自製 parser 繞過官方 client。
 - 此 T03 只證明最小整合；正式餐單 tools／多輪狀態及 live 品質仍屬 T09/T12，保存身份／CAS 仍屬 T07。
+
+### 2026-09-28 T04 受控食譜與營養計算
+
+- 新增前 consumer 搜尋：`rg -n 'Recipe|PlannedMeal|NutritionTotal|calculate_day' backend/src backend/tests` 無匹配；新增後以 `rg -n 'recipe_meal|load_catalog|calculate_day|NutrientValue|MealNutrition' backend/src backend/tests` 確認 consumer 為新 recipes application 與三個 T04 測試檔，未變更既有目標 API。
+- `test_nutrition_totals.py`：跨天同食譜／每日份量、外食缺值、部分餐次、2100.1 kcal／99.9 g 原值比較、未知來源版本，7 failed → 7 passed（`uv run --project backend --frozen pytest backend/tests/test_nutrition_totals.py -q`，`.artifacts/t04-totals-{red,green}.log`）；空介面沒有產生 kcal total 的案例為輸出資料缺漏，其餘為業務 assertion。後續補每100g、指定外食日期／餐次與未設定營養項回歸。
+- `test_recipe_portions.py`：非法份量／增量／非有限值與半顆食材，7 failed → 7 passed（`.artifacts/t04-portions-{red,green}.log`）。食譜 adapter 先缺營養／未守份量而 2 failed，再接受控來源與份量驗證 GREEN（`.artifacts/t04-recipe-adapter-red.log`、`t04-domain-green.log`）。
+- Catalog：缺受控 recipe IDs assertion RED → GREEN（`.artifacts/t04-catalog-{red,green}.log`）。8 筆合成食譜隨 Python package 保存，數字不是實測；生／熟／即食狀態、g/ml/piece、營養來源版本、件數增量、設備／步驟、未知保存／復熱／成本均明示。筆數由 checkout 外 wheel smoke 的 `assert len(load_catalog()) == 8` 核對，非人工估計。
+- 三種 mutation：null 當 0、跨天先依 source_id 去重、比較前取整，皆使對應測試失敗，finally 精確還原（`.artifacts/t04-mutation-{null,cross-day,rounding}.log`）。
+- 獨立 correctness review 找出部分餐次個別 within_target 與先除後乘的件數誤差，兩項皆採修正。對照產品 §7 修正原錯誤 assertion，新反例 2 failed → GREEN（`.artifacts/t04-review-red.log`）；個別達標也需 full_day，件數改以原始 quantity*amount 對 basis*increment 整除，不先算1/3。複查無新增問題。
+- 最終 Python 66 passed（`uv run --project backend --frozen pytest backend/tests -q`，`.artifacts/t04-python-final.log`）；ruff check／format 與 mypy no-incremental 通過。`uv build --project backend --wheel --out-dir .artifacts/t04-dist` 後安裝至隔離 wheel-env，從 `/tmp` 以 `python -I` 載入 packaged catalog 並驗1.5份雞肉飯為1050 kcal（`.artifacts/t04-wheel*.log`）。Web／公開契約未改，未額外重跑不受影響的瀏覽器流程。
+- 配餐搜尋／scope／外食鎖定與 API 串接由 T05 接續；購物／設備排程由 T06 接續，沒有將純營養計算宣稱完整餐單已完成。
