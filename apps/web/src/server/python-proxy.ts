@@ -1,13 +1,13 @@
-type PythonRoute = "/api/v1/goals/validate" | "/agent";
+type PythonRoute = "/api/v1/goals/validate" | "/agent" | "/api/v1/recipes";
 
 export async function proxyPython(request: Request, path: PythonRoute) {
   const origin = process.env.MEAL_API_ORIGIN;
   if (!origin) return Response.json({ error: "api_unavailable" }, { status: 503 });
   try {
     const upstream = await fetch(new URL(path, origin), {
-      method: "POST",
+      method: path === "/api/v1/recipes" ? "GET" : "POST",
       headers: { "content-type": "application/json", accept: path === "/agent" ? "text/event-stream" : "application/json" },
-      body: await request.text(),
+      body: path === "/api/v1/recipes" ? undefined : await request.text(),
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(path === "/agent" ? 60_000 : 10_000)]),
       cache: "no-store",
       redirect: "manual",

@@ -34,6 +34,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plan/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Contract */
+        post: operations["preview_contract_api_plan_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/session": {
         parameters: {
             query?: never;
@@ -114,6 +131,23 @@ export interface paths {
         put?: never;
         /** Validate */
         post: operations["validate_api_v1_proposals_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recipes */
+        get: operations["recipes_api_v1_recipes_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -351,6 +385,8 @@ export interface components {
             candidate: components["schemas"]["PlanCandidate-Input"];
             /** Days */
             days: components["schemas"]["DailySummary"][];
+            /** Mealnutrition */
+            mealNutrition: components["schemas"]["MealSummary"][];
             prep: components["schemas"]["PrepPlan-Input"];
             shopping: components["schemas"]["ShoppingList"];
             /** Warnings */
@@ -361,6 +397,8 @@ export interface components {
             candidate: components["schemas"]["PlanCandidate-Output"];
             /** Days */
             days: components["schemas"]["DailySummary"][];
+            /** Mealnutrition */
+            mealNutrition: components["schemas"]["MealSummary"][];
             prep: components["schemas"]["PrepPlan-Output"];
             shopping: components["schemas"]["ShoppingList"];
             /** Warnings */
@@ -537,6 +575,23 @@ export interface components {
              */
             slot: "breakfast" | "lunch" | "dinner" | "snack";
         };
+        /** MealSummary */
+        MealSummary: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /** Nutrients */
+            nutrients: {
+                [key: string]: components["schemas"]["NutrientRecord"];
+            };
+            /**
+             * Slot
+             * @enum {string}
+             */
+            slot: "breakfast" | "lunch" | "dinner" | "snack";
+        };
         /** NutrientRecord */
         NutrientRecord: {
             /** Amount */
@@ -557,6 +612,8 @@ export interface components {
             known: number;
             /** Missing */
             missing: string[];
+            /** Targetdifference */
+            targetDifference: number | null;
             /** Withintarget */
             withinTarget: boolean | null;
         };
@@ -892,6 +949,33 @@ export interface components {
             /** Startminute */
             startMinute: number;
         };
+        /** PreviewRequest */
+        PreviewRequest: {
+            constraints: components["schemas"]["PlanningConstraints"];
+            context: components["schemas"]["ProposalContext"];
+            /**
+             * Fixedmeals
+             * @default []
+             */
+            fixedMeals: components["schemas"]["PlannedMeal-Input"][];
+            goal: components["schemas"]["ConfirmedGoal-Input"];
+            /** Pantry */
+            pantry?: components["schemas"]["PantryItem"][] | null;
+            /** Replacements */
+            replacements?: {
+                [key: string]: string;
+            };
+            /**
+             * Schemaversion
+             * @constant
+             */
+            schemaVersion: 1;
+            /**
+             * Searchbudget
+             * @default 20000
+             */
+            searchBudget: number;
+        };
         /** ProposalContext */
         ProposalContext: {
             /** Baserevision */
@@ -1159,6 +1243,39 @@ export interface operations {
             };
         };
     };
+    preview_contract_api_plan_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildProposalResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     session_create_contract_api_session_post: {
         parameters: {
             query?: never;
@@ -1340,6 +1457,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recipes_api_v1_recipes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Recipe"][];
                 };
             };
         };

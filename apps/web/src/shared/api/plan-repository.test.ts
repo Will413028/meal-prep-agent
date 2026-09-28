@@ -46,3 +46,9 @@ test("clear confirms absence after an interrupted delete but never treats read f
     await expect(new PlanRepository(unconfirmed).clear(state.csrfToken)).rejects.toThrow("clear_unconfirmed");
   }
 });
+
+test("unsupported snapshots expose a specific recovery code without creating a session", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({error:"unsupported_state"},{status:409}));
+  await expect(new PlanRepository(fetcher).read()).rejects.toMatchObject({status:409,code:"unsupported_state"});
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});

@@ -1,18 +1,22 @@
-import { validateSession, type PlanActionRequest, type SessionState } from "./persistence";
+import { validateSession, type PlanActionRequest, type SessionState, type PreviewRequest } from "./persistence";
+import { validateBuildResult } from "./validate";
 
 export class PlanRepositoryError extends Error {
   constructor(public status: number, public code: string) { super(code); }
 }
 
 export class PlanRepository {
-  constructor(private fetcher: typeof fetch = fetch) {}
+  constructor(private fetcher: typeof fetch = (...args) => fetch(...args)) {}
   private async request(path: string, method = "GET", body?: unknown, csrf?: string): Promise<Response> {
     return this.fetcher(path,{method,credentials:"same-origin",cache:"no-store",
       headers:{"content-type":"application/json","x-meal-client":"1",...(csrf ? {"x-meal-csrf":csrf} : {})},
       ...(body === undefined ? {} : {body:JSON.stringify(body)})});
   }
   private async state(response: Response): Promise<SessionState> {
-    if (!response.ok) throw new PlanRepositoryError(response.status,"save_rejected");
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new PlanRepositoryError(response.status,body?.error === "unsupported_state" ? "unsupported_state" : "save_rejected");
+    }
     try { return validateSession(await response.json()); }
     catch { throw new PlanRepositoryError(502,"invalid_response"); }
   }
@@ -22,6 +26,11 @@ export class PlanRepository {
   }
   async initialize(): Promise<SessionState> {
     return this.state(await this.request("/api/session","POST",{schemaVersion:1}));
+  }
+  async preview(body: PreviewRequest, csrf: string) {
+    const response = await this.request("/api/plan/preview","POST",body,csrf);
+    if (!response.ok) throw new PlanRepositoryError(response.status,"preview_rejected");
+    return validateBuildResult(await response.json());
   }
   async clear(csrf: string): Promise<void> {
     try {

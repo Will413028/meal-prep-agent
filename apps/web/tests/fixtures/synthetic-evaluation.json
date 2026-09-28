@@ -940,25 +940,29 @@
           "known": 2012.5,
           "complete": true,
           "missing": [],
-          "withinTarget": true
+          "withinTarget": true,
+          "targetDifference": 0.0
         },
         "protein": {
           "known": 103.75,
           "complete": true,
           "missing": [],
-          "withinTarget": true
+          "withinTarget": true,
+          "targetDifference": 0.0
         },
         "carbs": {
           "known": 296.25,
           "complete": true,
           "missing": [],
-          "withinTarget": null
+          "withinTarget": null,
+          "targetDifference": null
         },
         "fat": {
           "known": 46.75,
           "complete": true,
           "missing": [],
-          "withinTarget": null
+          "withinTarget": null,
+          "targetDifference": null
         }
       },
       "coverage": [
@@ -976,25 +980,29 @@
           "known": 2012.5,
           "complete": true,
           "missing": [],
-          "withinTarget": true
+          "withinTarget": true,
+          "targetDifference": 0.0
         },
         "protein": {
           "known": 103.75,
           "complete": true,
           "missing": [],
-          "withinTarget": true
+          "withinTarget": true,
+          "targetDifference": 0.0
         },
         "carbs": {
           "known": 296.25,
           "complete": true,
           "missing": [],
-          "withinTarget": null
+          "withinTarget": null,
+          "targetDifference": null
         },
         "fat": {
           "known": 46.75,
           "complete": true,
           "missing": [],
-          "withinTarget": null
+          "withinTarget": null,
+          "targetDifference": null
         }
       },
       "coverage": [
@@ -1012,25 +1020,29 @@
           "known": 2012.5,
           "complete": true,
           "missing": [],
-          "withinTarget": true
+          "withinTarget": true,
+          "targetDifference": 0.0
         },
         "protein": {
           "known": 103.75,
           "complete": true,
           "missing": [],
-          "withinTarget": true
+          "withinTarget": true,
+          "targetDifference": 0.0
         },
         "carbs": {
           "known": 296.25,
           "complete": true,
           "missing": [],
-          "withinTarget": null
+          "withinTarget": null,
+          "targetDifference": null
         },
         "fat": {
           "known": 46.75,
           "complete": true,
           "missing": [],
-          "withinTarget": null
+          "withinTarget": null,
+          "targetDifference": null
         }
       },
       "coverage": [
@@ -1465,5 +1477,241 @@
     ],
     "totalMinutes": 140,
     "sourceLabel": "合成示範流程；時間為估計，非食品安全指引"
-  }
+  },
+  "mealNutrition": [
+    {
+      "day": "2026-10-01",
+      "slot": "breakfast",
+      "nutrients": {
+        "kcal": {
+          "amount": 562.5,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 27.5,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 81.25,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 15.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      }
+    },
+    {
+      "day": "2026-10-01",
+      "slot": "dinner",
+      "nutrients": {
+        "kcal": {
+          "amount": 750.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 31.25,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 125.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 13.75,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      }
+    },
+    {
+      "day": "2026-10-01",
+      "slot": "lunch",
+      "nutrients": {
+        "kcal": {
+          "amount": 700.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 45.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 90.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 18.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      }
+    },
+    {
+      "day": "2026-10-02",
+      "slot": "breakfast",
+      "nutrients": {
+        "kcal": {
+          "amount": 562.5,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 27.5,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 81.25,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 15.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      }
+    },
+    {
+      "day": "2026-10-02",
+      "slot": "dinner",
+      "nutrients": {
+        "kcal": {
+          "amount": 750.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 31.25,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 125.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 13.75,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      }
+    },
+    {
+      "day": "2026-10-02",
+      "slot": "lunch",
+      "nutrients": {
+        "kcal": {
+          "amount": 700.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 45.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 90.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 18.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      }
+    },
+    {
+      "day": "2026-10-03",
+      "slot": "breakfast",
+      "nutrients": {
+        "kcal": {
+          "amount": 562.5,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 27.5,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 81.25,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 15.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      }
+    },
+    {
+      "day": "2026-10-03",
+      "slot": "dinner",
+      "nutrients": {
+        "kcal": {
+          "amount": 750.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 31.25,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 125.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 13.75,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      }
+    },
+    {
+      "day": "2026-10-03",
+      "slot": "lunch",
+      "nutrients": {
+        "kcal": {
+          "amount": 700.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "protein": {
+          "amount": 45.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "carbs": {
+          "amount": 90.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        },
+        "fat": {
+          "amount": 18.0,
+          "source": "synthetic",
+          "version": "recipes-v1"
+        }
+      }
+    }
+  ]
 }

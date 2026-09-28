@@ -29,6 +29,36 @@ def goal():
     )
 
 
+def test_evaluation_reports_actual_meal_nutrition_with_its_source():
+    meal = chicken().model_copy(update={"quantity": Decimal("1.5")})
+    result = evaluate(candidate((meal,)))
+    payload = result.model_dump(mode="json")
+    assert payload.get("mealNutrition") == [
+        {
+            "day": "2026-10-01",
+            "slot": "lunch",
+            "nutrients": {
+                "kcal": {
+                    "amount": 1050,
+                    "source": "synthetic",
+                    "version": "recipes-v1",
+                },
+                "protein": {
+                    "amount": 67.5,
+                    "source": "synthetic",
+                    "version": "recipes-v1",
+                },
+                "carbs": {
+                    "amount": 135,
+                    "source": "synthetic",
+                    "version": "recipes-v1",
+                },
+                "fat": {"amount": 27, "source": "synthetic", "version": "recipes-v1"},
+            },
+        }
+    ]
+
+
 def candidate(meals=()):
     return PlanCandidate(
         goal=goal(),

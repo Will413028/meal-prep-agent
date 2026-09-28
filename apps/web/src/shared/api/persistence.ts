@@ -2,9 +2,16 @@ import type { paths } from "./schema";
 import sessionResponse from "./SessionState-validator.js";
 import actionRequest from "./PlanActionRequest-validator.js";
 import sessionInit from "./SessionInit-validator.js";
+import previewRequest from "./PreviewRequest-validator.js";
 
 export type SessionState = paths["/api/plan"]["get"]["responses"][200]["content"]["application/json"];
 export type PlanActionRequest = paths["/api/plan/actions"]["post"]["requestBody"]["content"]["application/json"];
+export type PreviewRequest = paths["/api/plan/preview"]["post"]["requestBody"]["content"]["application/json"];
+
+export function validatePreviewRequest(value: unknown): PreviewRequest {
+  if (!previewRequest(value)) throw new Error("Invalid preview contract");
+  return value as PreviewRequest;
+}
 
 export function validateSession(value: unknown): SessionState {
   if (!sessionResponse(value)) throw new Error("Invalid session contract");

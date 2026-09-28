@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { paths } from "../../shared/api/schema";
-import { validateEvaluation, validateProposal } from "../../shared/api/validate";
-import { validateAction, validateSession, validateSessionInit, type SessionState } from "../../shared/api/persistence";
+import { validateBuildResult, validateEvaluation, validateProposal } from "../../shared/api/validate";
+import { validateAction, validateSession, validateSessionInit, validatePreviewRequest, type SessionState } from "../../shared/api/persistence";
 import { commitSession, createSession, deleteSession, hash, readSession, type SessionRow } from "./sessions";
 import { parseActionJson } from "./json";
 
@@ -12,6 +12,9 @@ export class PersistenceError extends Error {
 export type ProposalInput = paths["/api/v1/proposals/validate"]["post"]["requestBody"]["content"]["application/json"];
 export type ProposalOutput = paths["/api/v1/proposals/validate"]["post"]["responses"][200]["content"]["application/json"];
 export type ProposalValidator = (input: ProposalInput, signal: AbortSignal) => Promise<ProposalOutput>;
+export type BuildInput = paths["/api/v1/proposals/build"]["post"]["requestBody"]["content"]["application/json"];
+export type BuildOutput = paths["/api/v1/proposals/build"]["post"]["responses"][200]["content"]["application/json"];
+export type ProposalBuilder = (input: BuildInput, signal: AbortSignal) => Promise<BuildOutput>;
 
 function normalized(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalized);
@@ -63,9 +66,31 @@ export function sessionCookie(token: string, expiresAt: number, now: number): st
   return `__Host-meal_session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((expiresAt-now)/1000))}; Expires=${new Date(expiresAt).toUTCString()}`;
 }
 
-export async function sessionHttp(request: Request, db: D1Database, clock: () => number = Date.now, validator?: ProposalValidator): Promise<Response> {
+export async function sessionHttp(request: Request, db: D1Database, clock: () => number = Date.now, validator?: ProposalValidator, builder?: ProposalBuilder): Promise<Response> {
   try {
     const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === "/api/plan/preview") {
+      writeOrigin(request);
+      const token = cookieToken(request);
+      if (!token) throw new PersistenceError(404,"not_found");
+      await checkCsrf(request,token);
+      let body;
+      try { body = validatePreviewRequest(parseActionJson(await request.text())); }
+      catch { throw new PersistenceError(400,"invalid_request"); }
+      const row = await readSession(db,token,clock(),body.context.planId);
+      if (!row) throw new PersistenceError(404,"not_found");
+      if (row.revision !== body.context.baseRevision || row.sessionGeneration !== body.context.sessionGeneration) throw new PersistenceError(409,"revision_conflict");
+      const state = await stateFromRow(row,token);
+      if (!builder) throw new PersistenceError(503,"calculation_unavailable");
+      const {schemaVersion: _version,...preferences} = body;
+      let result;
+      try { result = validateBuildResult(await builder({...preferences,base:state.current},request.signal)); }
+      catch (error) { if (error instanceof PersistenceError) throw error; throw new PersistenceError(503,"calculation_unavailable"); }
+      const latest = await readSession(db,token,clock(),row.planId);
+      if (!latest || latest.revision !== row.revision || latest.sessionGeneration !== row.sessionGeneration || latest.schemaVersion !== row.schemaVersion) throw new PersistenceError(409,"revision_conflict");
+      if (result.proposal && (result.proposal.planId !== row.planId || result.proposal.sessionGeneration !== row.sessionGeneration || result.proposal.baseRevision !== row.revision || result.proposal.runId !== body.context.runId)) throw new PersistenceError(502,"invalid_calculation_response");
+      return response(result);
+    }
     if (request.method === "POST" && url.pathname === "/api/session") {
       writeOrigin(request);
       try { validateSessionInit(parseActionJson(await request.text())); } catch { throw new PersistenceError(400,"invalid_request"); }

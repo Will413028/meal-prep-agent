@@ -32,6 +32,7 @@ class NutrientTotal:
     complete: bool
     missing: tuple[str, ...]
     within_target: bool | None
+    target_difference: Decimal | None = None
 
 
 @dataclass(frozen=True)
@@ -89,7 +90,12 @@ def calculate_day(
                 if full_day and complete and target
                 else None
             )
-            totals[name] = NutrientTotal(known, complete, tuple(missing), within)
+            difference = None
+            if within is not None and target is not None:
+                difference = min(max(known, target.minimum), target.maximum) - known
+            totals[name] = NutrientTotal(
+                known, complete, tuple(missing), within, difference
+            )
     within_targets = None
     if full_day and targets and all(totals[name].complete for name in targets):
         within_targets = all(totals[name].within_target for name in targets)

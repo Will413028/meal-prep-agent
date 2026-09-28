@@ -153,6 +153,7 @@ class NutrientSummary(Contract):
     complete: bool
     missing: tuple[str, ...]
     withinTarget: bool | None
+    targetDifference: JsonDecimal | None
 
 
 class DailySummary(Contract):
@@ -163,12 +164,17 @@ class DailySummary(Contract):
     withinTargets: bool | None
 
 
+class MealSummary(MealKey):
+    nutrients: dict[NutrientName, NutrientRecord] = Field(min_length=4, max_length=4)
+
+
 class Evaluation(Contract):
     candidate: PlanCandidate
     days: tuple[DailySummary, ...]
     warnings: tuple[str, ...]
     shopping: ShoppingList
     prep: PrepPlan
+    mealNutrition: tuple[MealSummary, ...]
 
 
 class EvaluatePlanRequest(Contract):
@@ -211,15 +217,18 @@ class ValidateProposalRequest(Contract):
     candidate: PlanCandidate
 
 
-class BuildProposalRequest(Contract):
-    context: ProposalContext
-    base: Evaluation | None
+class BuildPreferences(Contract):
     goal: ConfirmedGoal
     constraints: PlanningConstraints
     pantry: tuple[PantryItem, ...] | None = Field(default=None, max_length=128)
     fixedMeals: tuple[PlannedMeal, ...] = Field(default=(), max_length=12)
     replacements: dict[str, str] = Field(default_factory=dict, max_length=12)
     searchBudget: int = Field(default=20000, ge=1, le=20000, strict=True)
+
+
+class BuildProposalRequest(BuildPreferences):
+    context: ProposalContext
+    base: Evaluation | None
 
 
 class BuildProposalResult(Contract):

@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 
 from meal_prep.modules.nutrition.api import router as goals_router
 from meal_prep.modules.planning.api import router as planning_router
+from meal_prep.modules.recipes.api import router as recipes_router
 
 
 def create_app() -> FastAPI:
@@ -33,4 +34,5 @@ def create_app() -> FastAPI:
 
     app.include_router(goals_router)
     app.include_router(planning_router)
+    app.include_router(recipes_router)
     return app

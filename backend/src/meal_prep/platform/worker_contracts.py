@@ -7,7 +7,14 @@ from fastapi import APIRouter
 from pydantic import AwareDatetime, Field
 
 from meal_prep.modules.nutrition.contracts import Contract, JsonDecimal
-from meal_prep.modules.planning.contracts import Evaluation, MealKey, PlanCandidate
+from meal_prep.modules.planning.contracts import (
+    BuildPreferences,
+    BuildProposalResult,
+    Evaluation,
+    MealKey,
+    PlanCandidate,
+    ProposalContext,
+)
 
 
 class SessionState(Contract):
@@ -69,6 +76,11 @@ class SessionInit(Contract):
     schemaVersion: Literal[1]
 
 
+class PreviewRequest(BuildPreferences):
+    schemaVersion: Literal[1]
+    context: ProposalContext
+
+
 class ClearedSession(Contract):
     cleared: Literal[True]
 
@@ -88,6 +100,11 @@ def plan_read_contract() -> SessionState:
 
 @router.post("/api/plan/actions", response_model=SessionState)
 def plan_action_contract(request: PlanActionRequest) -> SessionState:
+    raise NotImplementedError("contract-only; served by Worker")
+
+
+@router.post("/api/plan/preview", response_model=BuildProposalResult)
+def preview_contract(request: PreviewRequest) -> BuildProposalResult:
     raise NotImplementedError("contract-only; served by Worker")
 
 

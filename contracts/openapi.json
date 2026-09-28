@@ -99,10 +99,10 @@
           }
         },
         "required": [
-          "context",
-          "base",
           "goal",
-          "constraints"
+          "constraints",
+          "context",
+          "base"
         ],
         "title": "BuildProposalRequest",
         "type": "object"
@@ -509,6 +509,13 @@
             "title": "Days",
             "type": "array"
           },
+          "mealNutrition": {
+            "items": {
+              "$ref": "#/components/schemas/MealSummary"
+            },
+            "title": "Mealnutrition",
+            "type": "array"
+          },
           "prep": {
             "$ref": "#/components/schemas/PrepPlan-Input"
           },
@@ -528,7 +535,8 @@
           "days",
           "warnings",
           "shopping",
-          "prep"
+          "prep",
+          "mealNutrition"
         ],
         "title": "Evaluation",
         "type": "object"
@@ -544,6 +552,13 @@
               "$ref": "#/components/schemas/DailySummary"
             },
             "title": "Days",
+            "type": "array"
+          },
+          "mealNutrition": {
+            "items": {
+              "$ref": "#/components/schemas/MealSummary"
+            },
+            "title": "Mealnutrition",
             "type": "array"
           },
           "prep": {
@@ -565,7 +580,8 @@
           "days",
           "warnings",
           "shopping",
-          "prep"
+          "prep",
+          "mealNutrition"
         ],
         "title": "Evaluation",
         "type": "object"
@@ -1016,6 +1032,50 @@
         "title": "MealKey",
         "type": "object"
       },
+      "MealSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "nutrients": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NutrientRecord"
+            },
+            "maxProperties": 4,
+            "minProperties": 4,
+            "propertyNames": {
+              "enum": [
+                "kcal",
+                "protein",
+                "carbs",
+                "fat"
+              ]
+            },
+            "title": "Nutrients",
+            "type": "object"
+          },
+          "slot": {
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack"
+            ],
+            "title": "Slot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "slot",
+          "nutrients"
+        ],
+        "title": "MealSummary",
+        "type": "object"
+      },
       "NutrientRecord": {
         "additionalProperties": false,
         "properties": {
@@ -1070,6 +1130,17 @@
             "title": "Missing",
             "type": "array"
           },
+          "targetDifference": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Targetdifference"
+          },
           "withinTarget": {
             "anyOf": [
               {
@@ -1086,7 +1157,8 @@
           "known",
           "complete",
           "missing",
-          "withinTarget"
+          "withinTarget",
+          "targetDifference"
         ],
         "title": "NutrientSummary",
         "type": "object"
@@ -1891,6 +1963,72 @@
         "title": "PrepStep",
         "type": "object"
       },
+      "PreviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "constraints": {
+            "$ref": "#/components/schemas/PlanningConstraints"
+          },
+          "context": {
+            "$ref": "#/components/schemas/ProposalContext"
+          },
+          "fixedMeals": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlannedMeal-Input"
+            },
+            "maxItems": 12,
+            "title": "Fixedmeals",
+            "type": "array"
+          },
+          "goal": {
+            "$ref": "#/components/schemas/ConfirmedGoal-Input"
+          },
+          "pantry": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PantryItem"
+                },
+                "maxItems": 128,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pantry"
+          },
+          "replacements": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 12,
+            "title": "Replacements",
+            "type": "object"
+          },
+          "schemaVersion": {
+            "const": 1,
+            "title": "Schemaversion",
+            "type": "integer"
+          },
+          "searchBudget": {
+            "default": 20000,
+            "maximum": 20000.0,
+            "minimum": 1.0,
+            "title": "Searchbudget",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "goal",
+          "constraints",
+          "schemaVersion",
+          "context"
+        ],
+        "title": "PreviewRequest",
+        "type": "object"
+      },
       "ProposalContext": {
         "additionalProperties": false,
         "properties": {
@@ -2547,6 +2685,47 @@
         ]
       }
     },
+    "/api/plan/preview": {
+      "post": {
+        "operationId": "preview_contract_api_plan_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildProposalResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Contract",
+        "tags": [
+          "worker-only"
+        ]
+      }
+    },
     "/api/session": {
       "delete": {
         "operationId": "session_clear_contract_api_session_delete",
@@ -2768,6 +2947,31 @@
         "summary": "Validate",
         "tags": [
           "planning"
+        ]
+      }
+    },
+    "/api/v1/recipes": {
+      "get": {
+        "operationId": "recipes_api_v1_recipes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Recipe"
+                  },
+                  "title": "Response Recipes Api V1 Recipes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Recipes",
+        "tags": [
+          "recipes"
         ]
       }
     },

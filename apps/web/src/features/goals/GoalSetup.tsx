@@ -13,7 +13,7 @@ import type { EstimateInput } from "./estimate";
 
 const sourceLabels = { manual: "手動", estimated: "本機估算", user_adjusted: "使用者調整估算" };
 
-export function GoalSetup() {
+export function GoalSetup({onConfirm}: {onConfirm?: (goal: ConfirmedGoal) => void} = {}) {
   const [draft, setDraft] = useState<GoalDraft | null>(null);
   const [confirmed, setConfirmed] = useState<ConfirmedGoal | null>(null);
   const [error, setError] = useState("");
@@ -68,6 +68,10 @@ export function GoalSetup() {
 
   return <section aria-labelledby="goal-title">
     <h2 id="goal-title">目標設定</h2>
+    <button type="button" disabled={busy} onClick={() => {
+      setEstimate(null);setShowEstimate(false);setIntent("maintain");setKcal("2000");setProtein("100");setCarbs("");setFat("");
+      void validate(2000,100,{}, {intent:"maintain",estimate:null});
+    }}>載入合成目標</button>
     <button type="button" onClick={() => { invalidateDraft(); setShowEstimate(!showEstimate); }}>幫我設定目標</button>
     {showEstimate && <EstimateForm onInvalidate={invalidateDraft} onEstimate={(local) => {
       const { kcal: energy, protein: grams } = local.result;
@@ -94,7 +98,7 @@ export function GoalSetup() {
       <p>碳水 {draft.validated.ranges.carbs ? `${draft.validated.ranges.carbs.min}–${draft.validated.ranges.carbs.max} g／日` : "未設定"}</p>
       <p>脂肪 {draft.validated.ranges.fat ? `${draft.validated.ranges.fat.min}–${draft.validated.ranges.fat.max} g／日` : "未設定"}</p>
       <p>政策：{draft.validated.policyVersion}；此範圍為產品配餐條件。</p>
-      <button type="button" onClick={() => { setConfirmed(confirmGoal(draft, new Date())); setDraft(null); }}>確認使用此目標</button>
+      <button type="button" onClick={() => { const goal = confirmGoal(draft, new Date()); setConfirmed(goal); onConfirm?.(goal); setDraft(null); }}>確認使用此目標</button>
     </section>}
     {confirmed && <section data-testid="confirmed-goal" aria-label="已確認目標">
       <h3>本次目標已確認</h3>

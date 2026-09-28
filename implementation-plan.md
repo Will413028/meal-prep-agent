@@ -48,7 +48,7 @@
 | T05 | T04 | 三天提案、局部修改及硬限制 | 已驗收：有限搜尋／canonical API、scope／鎖定／來源、真 HTTP 跨語言契約 |
 | T06 | T05 | 購物、庫存與備餐衍生資料 | 已驗收：庫存單次扣抵、勾選／衍生diff、設備序列與分裝、HTTP完整快照 |
 | T07 | T01、T05、T06 | D1／匿名身份、原子採用與清除 | 本地驗收完成；部署案例由 T11 驗 |
-| T08 | T02、T07 | 雙入口與手動操作完整切片 | 未開始 |
+| T08 | T02、T07 | 雙入口與手動操作完整切片 | 本地驗收完成：兩入口、營養／比較、採用換菜恢復及故障唯讀；設計與正確性審查已修正 |
 | T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 未開始 |
 | T10 | T09 | 多分頁、隱私與限額故障測試 | 未開始 |
 | T11 | T10；部署條件具備 | 實際環境與完整 K3 | 未開始 |
@@ -290,3 +290,23 @@
 - Mutation（不是首次 RED）：暫移除 CAS owner／revision／expiresAt predicate，分別 1／3／2 failed，其餘 15／13／14 passed（`t07-mutation-{owner,revision,expiry}.log`）；還原後回歸綠。
 - design-review：1 改、0 記、0 提、0 駁回。移除 Ajv 內部 helper mutation，以固定 esbuild 於生成階段 bundle standalone ESM；官方依據為 [Ajv standalone runtime requirements](https://ajv.js.org/standalone.html#requirement-at-runtime)。獨立複查確認解決。correctness review：2 改，no-op 在 Python await 後也須重查身份／期限／revision；DELETE 回應中斷須確認 absence，讀失敗或現存 session 不宣稱已清除。`t07-review-red.log` 2 failed／87 passed → `t07-review-green.log` 89 passed，獨立複查無新增實質問題。
 - 最終命令：`pnpm test:web` 89 passed；`uv run --project backend --frozen pytest backend/tests -q` 110 passed；`pnpm contracts:check`、`pnpm test:contracts`（Python 2＋TS 2）、`pnpm typecheck`、ruff check／format、backend mypy、Next build、vinext build 通過。`MEAL_TEST_WORKER=1 pnpm test:e2e` 12 passed（`t07-worker-e2e-final.log`）；本地通過不代表部署 D1／K3 或完整 UI 完成。T08 接操作畫面，T11 驗正式 D1／Python 隔離與回退。
+
+
+### T08 執行紀錄（2026-09-28）
+
+- Consumer 盤點：`rg -n -g '*.py' -g '*.ts' -g '*.tsx' -g '!schema.d.ts' -g '!*-validator*' 'BuildProposalRequest|BuildProposalResult' backend apps/web/src apps/web/tests`，結果在 `.artifacts/t08-build-consumers.txt`。抽出 Python `BuildPreferences` 共用公開預覽條件；原 build API body／use case 不改語義。Worker PreviewRequest 不接受 caller base，真正 base 從 D1 讀取。
+- `POST /api/plan/preview`：先驗 Cookie／CSRF／owner／generation／revision，Python 計算後再檢查目前版本；預覽不寫 D1。`pnpm test:web` 路由預期 200 得 404 的真 RED（`t08-preview-red.log`）→ 90 GREEN（`t08-preview-green.log`）。食譜目錄 GET 404 RED（`t08-catalog-red.log`）→ Python API 提供受控 synthetic catalog；固定 proxy 不轉送 Cookie。
+- 完整畫面 RED：`MEAL_TEST_WORKER=1 pnpm --filter @meal-prep/web test:e2e planner.spec.ts` 缺「安排三天餐單」失敗（`t08-flow-red.log`）；接上 PlannerWorkspace／PlanView 後「手動確認→三天提案→採用→局部換菜→取消→再次換菜採用→重開版本2」GREEN（`t08-flow-green.log`）。Worker／Python／D1 都是真實本地服務，不用預錄提案。
+- 實際瀏覽器揭露 PlanRepository 把原生 fetch 直接保存成 method 後以 instance this 呼叫，Chrome 回 Illegal invocation；單元 mock 沒揭露。獨立 chromium probe 重現於 `t08-fetch-binding-probe.log`，改成預設 arrow wrapper 保留呼叫語義，完整瀏覽器流程回綠。原先失敗不可歸因 D1 故障。
+- 兩入口、鎖定／勾選／復原／清除、保存失敗保留原快照且唯讀、Python preview 不可用時仍可勾選，都在 `planner.spec.ts` 已驗。勾選為伺服器確認後才變更，測試採 click＋revision／checked assertion；不能以 Playwright check 的立即樂觀狀態假設要求產品先顯示成功。
+- PlanningForm 補安排餐次、設備、排除／偏好／時間硬限制、固定三天早餐、多個固定外食及已確認庫存；外食空白營養為 null。固定早餐欄位不存在的 RED（`t08-fixed-red.log`）→ 三個 planner cases GREEN（`t08-fixed-green.log`）。庫存單位不存在的 RED（`t08-unit-red.log`）→ kg 0.1 扣抵 g 100 的真瀏覽器流程 GREEN。外食食材不拆入購物／備餐。
+- 最新 `MEAL_TEST_WORKER=1 pnpm test:e2e` 15 passed（`t08-e2e-latest.log`），包含既有12與新增3個planner案例；`pnpm typecheck`／vinext build 已通過。其餘目前回歸見 `t08-web-latest.log`、`t08-python-latest.log`、`t08-contract-check.log`、`t08-wire.log`、`t08-ruff.log`、`t08-mypy.log`。
+- 上述15個案例為中途證據，後續補完整營養／比較、視覺驗證及獨立審查如下。
+
+- 每餐營養由 Python 共用 `calculate_day` 依實際份量產生，不在 Web 重算；新增 `mealNutrition`、每天各營養 `targetDifference`。未知／部分餐次／未設定目標的差距為 null。逐餐缺欄 RED → GREEN（`t08-meal-nutrition-red.log`）；卡片缺值／未知 RED → GREEN（`t08-meal-view-red.log`）；範圍內外差距3個 RED → GREEN（`t08-target-difference-red.log`）。
+- 提案顯示餐點、每日營養、採買與料理步驟的前後差異，目標摘要顯示來源／範圍。合成目標仍須確認；transport probe 移到 `/diagnostics/transport`。比較、產品入口與合成按鈕各自真 RED 記於 `t08-comparison-red.log`、`t08-product-entry-red.log`、`t08-demo-red.log`。
+- 清除回應／回讀都失敗時保留唯讀快照；`t08-clear-red.log` 原顯示「已保存」的 assertion RED，修正後完整 E2E GREEN。
+- **設計決策（Will 確認）**：採嚴格新契約，不為尚未部署的舊本機快照保留 optional defaults。缺 `mealNutrition`／`targetDifference` 時拒絕 current 或 previous；D1 原列保留至既有到期清理。UI 只在明確按「開始新規劃」後建立新身份，不自動 migrate／delete。維持開發中 v1；本次補輸出欄位沒有更換營養算法。`t08-strict-red.log` 2 RED → 95 GREEN；`t08-recovery-red.log` 舊格式恢復入口 RED → GREEN；D1 測試確認新身份建立後原列內容仍在。
+- 獨立 design-review 檢查身份／CAS、preview 邊界、衍生營養、契約／舊快照及 UI 狀態：1 項發現，提1（已獲決定）→ 改1；複查無剩餘 finding。獨立 correctness review 3 項全部修正：中文名稱轉 catalog foodId，未知／歧義拒絕；adopt／undo／reload／失敗回讀同步表單；回讀同時同步 goal。`t08-review-red.log` 3 RED，`t08-goal-recovery-red.log` 預期1800卻送2000的獨立 RED，修正後回歸 GREEN。第二次靜態複查確認3項解決。
+- 桌機1360×1000／手機390×844已目視檢查 `.artifacts/t08-desktop.png`、`t08-mobile.png`，無橫向溢出，按鍵焦點可見；Playwright 同時驗寬度及鍵盤焦點。所有畫面資料清楚標示合成或使用者來源。
+- 最終驗證：`uv run --project backend --frozen pytest backend/tests -q` 115 passed（`t08-python-verified.log`）；`pnpm test:web` 96 passed（`t08-web-verified.log`）；`MEAL_TEST_WORKER=1 pnpm test:e2e` 21 passed（`t08-reviewed-e2e.log`），新增復原庫存斷言另跑 `--grep 'fixed breakfast'` 1 passed（`t08-undo-pantry.log`）。`pnpm contracts:check`、`pnpm test:contracts` Python2＋TS2、ruff check／format、mypy、typecheck、Next build、vinext build、本地 D1 probe 均通過。原始 RED、後續 mutation 與環境失敗分開記錄；本階段不宣稱正式 Agent／部署／完整 MVP gates 通過。

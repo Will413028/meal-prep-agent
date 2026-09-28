@@ -1,5 +1,16 @@
 import { expect, test } from "@playwright/test";
 
+test("synthetic goal preset still requires explicit goal confirmation", async ({page}) => {
+  await page.goto("/");
+  await page.getByRole("button",{name:"載入合成目標"}).click();
+  await expect(page.getByLabel("每日熱量（kcal）")).toHaveValue("2000");
+  await expect(page.getByRole("region",{name:"目標預覽"})).toBeVisible();
+  await expect(page.getByTestId("confirmed-goal")).toHaveCount(0);
+  await page.getByRole("button",{name:"確認使用此目標"}).click();
+  await expect(page.getByTestId("confirmed-goal")).toContainText("2000 kcal");
+  await expect(page.getByRole("region",{name:"已採用餐單"})).toHaveCount(0);
+});
+
 test("manual ranges and optional macros are visible and validated without rounding", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByLabel("每日熱量（kcal）")).toHaveAttribute("type", "text");

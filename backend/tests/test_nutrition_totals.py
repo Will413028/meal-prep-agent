@@ -84,6 +84,25 @@ def test_partial_coverage_never_claims_all_day_success():
 
 
 @pytest.mark.parametrize(
+    "kcal,difference", [("1800", "100"), ("2200", "-100"), ("2000", "0")]
+)
+def test_target_difference_uses_range_edges_only_for_complete_days(kcal, difference):
+    meals = (
+        meal(slot="breakfast", kcal=kcal, protein=None),
+        meal(kcal="0", protein="0"),
+        meal(slot="dinner", kcal="0", protein="0"),
+    )
+    total = calculate_day(DAY, meals, TARGETS)
+    assert total.nutrients["kcal"].target_difference == D(difference)
+    assert total.nutrients["protein"].target_difference is None
+    assert total.nutrients["fat"].target_difference is None
+    assert (
+        calculate_day(DAY, meals[:2], TARGETS).nutrients["kcal"].target_difference
+        is None
+    )
+
+
+@pytest.mark.parametrize(
     "kcal,protein,expected",
     [("2100.1", "100", False), ("2100", "99.9", False), ("2100", "100", True)],
 )

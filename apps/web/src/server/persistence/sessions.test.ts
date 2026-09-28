@@ -3,7 +3,7 @@ import { afterAll, beforeAll, expect, test } from "vitest";
 import { Miniflare } from "miniflare";
 import type { D1Database } from "@cloudflare/workers-types";
 import { commitSession, createSession, deleteSession, expireSessions, readSession, sessionLifetime } from "./sessions";
-import { sessionHttp, type ProposalValidator } from "./http";
+import { sessionHttp, type ProposalValidator, type ProposalBuilder } from "./http";
 import synthetic from "../../../tests/fixtures/synthetic-evaluation.json";
 import { validateEvaluation } from "../../shared/api/validate";
 import { validateSession } from "../../shared/api/persistence";
@@ -36,6 +36,24 @@ test("the first additive migration preserves the prior probe schema for applicat
   // Previous application versions ignore the new table; rollback retains it.
   expect(await db.prepare("SELECT marker FROM probe WHERE id=?").bind(1).first()).toEqual({marker:"synthetic"});
   expect(await readSession(db,fresh.token,now)).toEqual(fresh.row);
+});
+
+test("preview uses the cloud base without saving and rejects a caller-supplied base", async () => {
+  const {headers,payload,evaluation} = await initializeHttp();
+  const preview = {schemaVersion:1,context:{planId:payload.planId,sessionGeneration:payload.sessionGeneration,baseRevision:0,runId:crypto.randomUUID(),scope:payload.action.scope},goal:evaluation.candidate.goal,constraints:evaluation.candidate.constraints};
+  let calls = 0;
+  const builder: ProposalBuilder = async input => {
+    calls++;
+    expect(input.base).toBeNull();
+    return {status:"ready",reason:null,examined:1,proposal:{...input.context,evaluation,diff:[],shoppingDiff:[],prepDiff:[],violations:[]}};
+  };
+  const send = (body: unknown) => sessionHttp(new Request("https://meal.test/api/plan/preview",{method:"POST",headers,body:JSON.stringify(body)}),db,()=>now,undefined,builder);
+  const response = await send(preview);
+  expect(response.status).toBe(200);
+  expect((await response.json()).status).toBe("ready");
+  expect((await readSession(db,headers.cookie.split("=")[1],now))?.revision).toBe(0);
+  expect((await send({...preview,base:evaluation})).status).toBe(400);
+  expect(calls).toBe(1);
 });
 
 test("explicit creation stores only an opaque token hash and valid thirty-day empty state", async () => {
@@ -309,5 +327,24 @@ test("an unchanged candidate must still reject a concurrent modification clear o
       return canonical(input,new AbortController().signal);
     };
     expect((await send(stale,racing)).status).toBe(409);
+  }
+});
+
+test("old nutrition snapshots remain in D1 after rejection and explicit new identity", async () => {
+  for (const missing of ["mealNutrition","targetDifference"]) {
+    const {token,row} = await createSession(db,now);
+    const old = JSON.parse(JSON.stringify(synthetic));
+    if (missing === "mealNutrition") delete old.mealNutrition;
+    else delete old.days[0].nutrients.kcal.targetDifference;
+    const original = JSON.stringify(old);
+    await db.prepare("UPDATE plan_sessions SET currentJson=? WHERE tokenHash=?").bind(original,row.tokenHash).run();
+    const cookie = `__Host-meal_session=${token}`;
+    const rejected = await sessionHttp(new Request("https://meal.test/api/plan",{headers:{cookie}}),db,()=>now);
+    expect(rejected.status).toBe(409);
+    expect(await rejected.json()).toEqual({error:"unsupported_state"});
+    const fresh = await sessionHttp(new Request("https://meal.test/api/session",{method:"POST",headers:{cookie,origin:"https://meal.test","content-type":"application/json","x-meal-client":"1"},body:'{"schemaVersion":1}'}),db,()=>now);
+    expect(fresh.status).toBe(201);
+    expect((await fresh.json() as {planId:string}).planId).not.toBe(row.planId);
+    expect((await readSession(db,token,now))?.currentJson).toBe(original);
   }
 });

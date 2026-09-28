@@ -16,7 +16,7 @@ from meal_prep.modules.recipes.application import (
     recipe_meal,
 )
 from meal_prep.modules.recipes.catalog import load_catalog
-from meal_prep.modules.recipes.contracts import Recipe
+from meal_prep.modules.recipes.contracts import NutrientRecord, Recipe
 from meal_prep.modules.shopping.application import shopping_list
 
 from .contracts import (
@@ -25,6 +25,7 @@ from .contracts import (
     Evaluation,
     MealDiff,
     MealKey,
+    MealSummary,
     NutrientSummary,
     PlanCandidate,
     PlannedMeal,
@@ -201,6 +202,7 @@ def evaluate(
                         complete=value.complete,
                         missing=value.missing,
                         withinTarget=value.within_target,
+                        targetDifference=value.target_difference,
                     )
                     for name, value in total.nutrients.items()
                 },
@@ -224,10 +226,30 @@ def evaluate(
         canonical.constraints.equipment,
         previous.prep.steps if previous else (),
     )
+    meal_summaries = []
+    for nutrition in nutrients:
+        total = calculate_day(nutrition.day, (nutrition,), {})
+        meal_summaries.append(
+            MealSummary(
+                day=nutrition.day,
+                slot=nutrition.slot,
+                nutrients={
+                    name: NutrientRecord.model_validate(
+                        {
+                            "amount": value.known if value.complete else None,
+                            "source": nutrition.nutrients[name].source,
+                            "version": nutrition.nutrients[name].version,
+                        }
+                    )
+                    for name, value in total.nutrients.items()
+                },
+            )
+        )
     return Evaluation(
         candidate=canonical,
         days=tuple(days),
         warnings=tuple(warnings),
         shopping=shopping,
         prep=prep,
+        mealNutrition=tuple(meal_summaries),
     )
