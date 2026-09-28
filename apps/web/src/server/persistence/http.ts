@@ -1,9 +1,9 @@
 import { boundedBody, RequestTooLarge } from "../request-limits";
-import type { D1Database } from "@cloudflare/workers-types";
 import type { paths } from "../../shared/api/schema";
 import { validateBuildResult, validateEvaluation, validateProposal } from "../../shared/api/validate";
 import { validateAgentRun, type AgentRunRequest, validateAction, validateSession, validateSessionInit, validatePreviewRequest, type SessionState } from "../../shared/api/persistence";
-import { commitSession, createSession, deleteSession, hash, readSession, type SessionRow } from "./sessions";
+import { commitSession, createSession, deleteSession, readSession, type SessionRow, type SessionStore } from "./sessions";
+import { cookieToken, hash } from "../session-identity";
 import { parseActionJson } from "./json";
 
 export class PersistenceError extends Error {
@@ -25,13 +25,8 @@ function normalized(value: unknown): unknown {
   return value;
 }
 
-export function cookieToken(request: Request): string | null {
-  const values = (request.headers.get("cookie") ?? "").split(";").map(value => value.trim()).filter(value => value.startsWith("__Host-meal_session="));
-  return values.length === 1 ? values[0].slice("__Host-meal_session=".length) : null;
-}
-
-export function writeOrigin(request: Request): void {
-  if (request.headers.get("origin") !== new URL(request.url).origin || request.headers.get("content-type")?.split(";")[0].trim() !== "application/json" || request.headers.get("x-meal-client") !== "1") {
+export function writeOrigin(request: Request, publicOrigin = new URL(request.url).origin): void {
+  if (request.headers.get("origin") !== publicOrigin || request.headers.get("content-type")?.split(";")[0].trim() !== "application/json" || request.headers.get("x-meal-client") !== "1") {
     throw new PersistenceError(403, "invalid_origin");
   }
 }
@@ -69,12 +64,12 @@ export function sessionCookie(token: string, expiresAt: number, now: number): st
   return `__Host-meal_session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((expiresAt-now)/1000))}; Expires=${new Date(expiresAt).toUTCString()}`;
 }
 
-export async function sessionHttp(request: Request, db: D1Database, clock: () => number = Date.now, validator?: ProposalValidator, builder?: ProposalBuilder, agent?: AgentRunner): Promise<Response> {
+export async function sessionHttp(request: Request, db: SessionStore, clock: () => number = Date.now, validator?: ProposalValidator, builder?: ProposalBuilder, agent?: AgentRunner, publicOrigin?: string): Promise<Response> {
   try {
     const url = new URL(request.url);
     const bodyText = request.method === "POST" ? await boundedBody(request) : "";
     if (request.method === "POST" && url.pathname === "/api/agent") {
-      writeOrigin(request);
+      writeOrigin(request,publicOrigin);
       const token = cookieToken(request);
       if (!token) throw new PersistenceError(404,"not_found");
       await checkCsrf(request,token);
@@ -97,7 +92,7 @@ export async function sessionHttp(request: Request, db: D1Database, clock: () =>
       return new Response(upstream.body,{status:upstream.status,headers});
     }
     if (request.method === "POST" && url.pathname === "/api/plan/preview") {
-      writeOrigin(request);
+      writeOrigin(request,publicOrigin);
       const token = cookieToken(request);
       if (!token) throw new PersistenceError(404,"not_found");
       await checkCsrf(request,token);
@@ -119,7 +114,7 @@ export async function sessionHttp(request: Request, db: D1Database, clock: () =>
       return response(result);
     }
     if (request.method === "POST" && url.pathname === "/api/session") {
-      writeOrigin(request);
+      writeOrigin(request,publicOrigin);
       try { validateSessionInit(parseActionJson(bodyText)); } catch { throw new PersistenceError(400,"invalid_request"); }
       const now = clock();
       const {token,row} = await createSession(db,now);
@@ -132,7 +127,7 @@ export async function sessionHttp(request: Request, db: D1Database, clock: () =>
       return response(await stateFromRow(row,token));
     }
     if (request.method === "DELETE" && url.pathname === "/api/session") {
-      writeOrigin(request);
+      writeOrigin(request,publicOrigin);
       const token = cookieToken(request);
       if (!token) throw new PersistenceError(404,"not_found");
       await checkCsrf(request,token);
@@ -141,7 +136,7 @@ export async function sessionHttp(request: Request, db: D1Database, clock: () =>
       return response({cleared:true},200,sessionCookie("",clock(),clock()));
     }
     if (request.method === "POST" && url.pathname === "/api/plan/actions") {
-      writeOrigin(request);
+      writeOrigin(request,publicOrigin);
       const token = cookieToken(request);
       if (!token) throw new PersistenceError(404,"not_found");
       await checkCsrf(request,token);

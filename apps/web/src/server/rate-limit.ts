@@ -1,6 +1,5 @@
 import type { RateLimit } from "@cloudflare/workers-types";
-import { cookieToken } from "./persistence/http";
-import { hash } from "./persistence/sessions";
+import { cookieToken, hash } from "./session-identity";
 
 export type RateLimitBindings = {
   API_RATE_LIMITER?: RateLimit;

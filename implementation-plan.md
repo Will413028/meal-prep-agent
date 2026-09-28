@@ -1,10 +1,10 @@
 # Meal Prep Agent — TDD 實作計畫
 
-更新：2026-09-29。T00–T10 的功能與本機驗證已完成；T11 實際部署大部分條件已驗，Workers Free CPU 方向待決；T12 真模型矩陣、A/N/K 對帳與遠端 CI 已驗，完整 MVP 判定仍依賴 T11 的 K3 CPU gate。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
+更新：2026-09-29。T00–T10 的功能與本機驗證已完成；T11 的 Oracle Web／API 與多項部署驗證已完成，依 Will 最新決定將保存 API／資料由 D1 移至 Oracle，以解除 Worker Free CPU 保存路徑超限；T12 真模型矩陣、A/N/K 對帳與遠端 CI 已驗，最終 MVP 判定須在遷移後重驗 K3。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
 
 ## 1. 前提與接續方式
 
-維持 Next.js／TypeScript、FastAPI／PydanticAI、AG-UI、Python Modular Monolith；Web 本機身體估算、Python 配餐驗證、D1 雲端保存與匿名 Cookie。第一版無帳號、Temporal 或跨裝置保存。免費模型與 Python 獨立部署的限制仍有效；部署主機已選既有 Oracle VM，以專案獨立容器／網路／Tunnel 隔離。保存採 D1＋匿名 Cookie 已確認，不新增登入帳號；身份與餐單歸屬檢查屬 Worker 責任。
+維持 Next.js／TypeScript、FastAPI／PydanticAI、AG-UI、Python Modular Monolith；Web 本機身體估算、Python 配餐驗證、匿名 Cookie 保存。第一版無帳號、Temporal 或跨裝置保存。免費模型與 Python 獨立部署的限制仍有效；部署主機已選既有 Oracle VM，以專案獨立容器／網路／Tunnel 隔離。T07 已完成 D1 保存，本輪 T11 依新決策改為 Oracle SQLite；身份與餐單歸屬檢查移到 Oracle Web，Worker 保留公開入口與限流。
 
 開始每個項目前，在實際 checkout 執行 `git status --short`、`git log -5 --oneline`、`git ls-files`，命令帶絕對路徑或 `git -C <repo>`。核對三份規格及下表證據；若實際檔案或版本與上次不同，先查差異與受影響 consumer，再接續，不覆蓋別人的未提交內容。新增契約前以 `rg` 搜尋既有 producer、consumer 與測試，將結果記在該項證據。
 
@@ -51,8 +51,8 @@
 | T08 | T02、T07 | 雙入口與手動操作完整切片 | 本地驗收完成：兩入口、營養／比較、採用換菜恢復及故障唯讀；設計與正確性審查已修正 |
 | T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 已驗收：正式 tools／Worker／聊天、取消與故障恢復、兩輪提案及一次 GLM live 完整工具鏈；品質矩陣留 T12 |
 | T10 | T09 | 多分頁、隱私與限額故障測試 | 已驗收（本地）：入口限流／body／run／token 預算、模式選擇／額度恢復、隱私／雙匿名context與mutation；真部署邊界留T11 |
-| T11 | T10；部署條件具備 | 實際環境與完整 K3 | 進行中：Oracle Web/API、D1故障／隔離、取消及整組回復已驗；Free CPU驗收方向待決定 |
-| T12 | T11 | live K4 與完整 MVP 驗收 | 進行中：四案例各三次 live、正式入口 Web live、A/N/K 對帳、帳戶 Neuron 分析計量與遠端 CI 已驗；最終 MVP 依賴 T11 的 K3 CPU gate |
+| T11 | T10；部署條件具備 | 實際環境與完整 K3 | 進行中：Oracle Web/API、D1故障／隔離、取消及整組回復已驗；依新決策將保存 API／資料遷至 Oracle，完成後重驗 K3 |
+| T12 | T11 | live K4 與完整 MVP 驗收 | 進行中：四案例各三次 live、正式入口 Web live、A/N/K 對帳、帳戶 Neuron 分析計量與遠端 CI 已驗；最終 MVP 依賴遷移後的 T11 K3 |
 
 每項可記「未開始／RED／GREEN／REFACTOR／已驗收／受阻」。只有必要案例與外部條件都有證據才標已驗收；以下內容是測試設計，尚不是執行結果。
 
@@ -163,6 +163,15 @@
 - K4：A1、A3、A5、A10 各至少三次 live，記模型版本、token／Neuron、延遲、來源及繁中品質；額度失敗可用可控故障注入驗恢復，不以故意耗盡帳戶當必要實驗。記錄 live 與注入證據的差別。
 - 任何關鍵約束失敗回對應增量補 RED／GREEN，再重跑受影響案例；額度不足分日驗證，不自動付費。
 - 補可重跑 README、展示合成標示、已知限制與復現路徑；所有必要證據齊全才宣稱 MVP 完成。此時再做整體規格／架構與實作對照，不能只看單項測試綠燈。
+
+### T11 追加 — Oracle 保存遷移與切換（2026-09-29 決策）
+
+Will 已決定把保存 API 與資料一併移到 Oracle，取代正式執行路徑的 D1。現有 49 筆 D1 session（`SELECT COUNT(*)`），其中 26 筆有已採用餐單；`expiresAt > now` 查詢確認 49 筆當下仍有效，revision 範圍 0–3、schemaVersion 均為 1。此數量是切換前盤點，切換時重新計數與對帳。沿用公開 DTO、匿名 Cookie、CSRF、CAS、30 天期限與 Python canonical 驗證；從今日條件重設計的結果是 Web 專用 SQLite volume、TypeScript 保存服務、Worker 固定轉送與限流、Python 私有計算服務。單機低寫入量適合 SQLite；PostgreSQL 能獨立擴容但增加服務與備份維運；受管資料庫減輕維運但不符合此版 Oracle 自有資料落點。舊 D1 schema／資料保留作遷移核對與可回復來源，正式 Worker 不再綁定 D1。
+
+1. **RED／GREEN：儲存與路由。** 先為 SQLite 真檔案寫同身份隔離、原子 CAS、期限／清除、restart 後讀回與故障不冒稱成功測試；為 Worker→Web 新固定路徑寫 Cookie 只限保存服務、Authorization／任意 header 不轉送、未知 API 拒絕、SSE 取消與 `Set-Cookie` 保留的 RED。GREEN 後完整重跑既有 `sessions.test.ts`、workerd、Playwright、契約與 build。SQLite volume 用獨立 UID／目錄，WAL 和 busy timeout；Web 無模型憑證，Python 無匿名 Cookie。
+2. **資料準備與對帳。** 先在 Oracle 查可用容量、目錄與既有資料；以正式 D1 `--table=plan_sessions` 匯出到受限檔案，在隔離的 SQLite 檔重播並比對列數、schema／revision 分佈及逐列內容摘要。不得在 log、Git 或對話輸出 tokenHash／快照內容；用不可逆摘要做對帳。測錯版與中斷匯入仍保留原 D1 並拒絕啟用候選。
+3. **切換與回復。** 短暫停寫（Worker 固定回 503，不發新 session），停寫後再次匯出最終 D1 快照並重建 Oracle 候選 DB；以完整逐列摘要對帳、SQLite 檔案完整性與健康檢查為放行條件。部署 Web/API 相容 artifact 後將 Worker 切到無 D1 的固定 Web 保存代理，驗正式入口兩匿名身份、CAS、採用／復原／重開、Agent SSE、故障與 Free CPU。失敗時先停寫、把 Oracle 已新增／修改列反向合併回 D1 並核對，再恢復舊 Worker；不得直接切回舊 D1 Worker 而遺失新寫入。D1 與備份不清除。
+4. **K3／T12 收尾。** 正式 Worker 的保存路徑 CPU 取樣需穩定符合 Free 限額，Node/Oracle 資源與私有入口隔離、容器重啟後資料持續、遠端 CI、完整部署 Playwright 及 live 預覽重驗。更新部署手冊、架構、驗收追溯與 second-brain 專案頁；每個完成子階段完成驗證後 commit，最後才勾 T11／T12 已驗收。
 
 ## 5. 驗收追溯
 
@@ -422,3 +431,11 @@ K4 使用固定 `@cf/zai-org/glm-4.7-flash`、合成食譜 `synthetic:recipes-v1
 - 遠端 CI run 36471787758 對 `5ef1b73` 的 Web job 成功；Python job 167 passed／1 failed，失敗在 SSE heartbeat 與上游 timeout 同時到達時，producer 已結束但錯誤仍在 queue，舊邏輯直接 return。新增穩定注入該競爭的 `test_heartbeat_timeout_does_not_hide_queued_source_error`，先 RED 再保留 queue 終止訊息使 GREEN；本機完整 Python 169 passed，ruff check／format、mypy 39 source 與原 deadline 案例連跑 100 次通過。修正後的遠端 CI 仍須重新驗收。
 - 修正 commit `fb235ab` 的 [遠端 CI run 36472443571](https://github.com/Will413028/meal-prep-agent/actions/runs/36472443571) 逐 job 核對 Python／Web 均 success；原失敗案例納入 Python 169 passed，Web job 含契約、112 Vitest、Node／workerd Playwright 與兩種 build。
 - 2026-09-28 UTC 透過 Cloudflare 官方 GraphQL Analytics `aiInferenceAdaptiveGroups` 查專案帳戶：固定 GLM-4.7-flash 116 次、input 505,163／output 19,457 tokens、`totalNeurons=3,486.6313`，ignored 原始摘要 `.artifacts/t12-account-neurons.json`。這是**整個帳戶所有專案**當日同模型用量，不能歸給本專案 12 筆案例；該 12 筆另以各 run usage 估算 796.21。依[官方免費額度](https://developers.cloudflare.com/workers-ai/platform/pricing/)為每日 10,000 Neurons，當下分析計量低於額度；[GraphQL 官方說明](https://developers.cloudflare.com/analytics/graphql-api/)明示分析資料不是計費依據，因此不宣稱已取得 Dashboard 帳單實值。
+
+### T11 Oracle SQLite 遷移執行紀錄（2026-09-29）
+
+- Will 指定保存 API 與資料一併移到 Oracle，取代正式 Worker 的 D1 執行路徑；先前 D1 盤點 49 列／26 已採用只作遷移前基線，停寫後重查。Worker 改為固定五路徑代理與限流；Web 專用 SQLite volume 持有身份、CAS、Python canonical 驗證及 Agent 已採用 base。公開 DTO、Cookie、CSRF、單列原子更新與免費模型均維持原契約。
+- RED→GREEN：Worker 轉送、安全 header／Cookie、`Set-Cookie`、停寫與 method allowlist；SQLite 真檔保存、競爭 CAS、缺檔／空檔拒絕、啟動補清過期列、競爭寫入最長等待小於 1 秒；私有 D1 反向回寫工具的新增／修改／刪除全列對帳。相應證據為 `.artifacts/t11-{sqlite-failclosed,expiry-startup,sqlite-lock,reconcile}-{red,green}.log` 及既有 Worker proxy 測試日誌。正式 runtime 不自建空庫；本機測試與開發透過明確初始化。250 ms SQLite 鎖等待於測試中使競爭寫入約 0.25 秒失敗，長期鎖競爭或頁面／SSE 延遲超標時再拆到 worker thread／獨立服務。
+- 獨立 design-review 四項處置：缺檔自建空庫、只靠 24 小時 process interval 清理、主要 HTTP 測試仍只跑 D1、D1 回復無反向工具，均已修正；原 D1 adapter 限回復窗口內 parity 測試，窗口關閉並通過 Oracle backup／restore 後退役。審查者全程唯讀。`sqlite-http.test.ts` 已在正式 SQLite adapter 驗身份、採用、revision、重試、重開與復原；D1 SQL 反向匯入另用 Wrangler **本地 D1** 演練，`DELETE`＋`INSERT` 兩命令成功，舊列被移除，查詢回 1 列、revision 2（`.artifacts/t11-d1-rehearsal/{reconcile,verify}.log`）；正式回復仍須停寫、遠端重匯出及逐列摘要核對。
+- 本地整組驗證：`pnpm test:web` 121 passed、Python pytest 173 passed、Next build／Worker dry-run 10.04 KiB、TS typecheck、mypy 39 source、ruff check／format、contract drift 與 wire Python 2＋TS 2 全通過；`MEAL_TEST_WORKER=1 pnpm --filter @meal-prep/web exec playwright test --workers=1` 經 standalone＋workerd＋真 SQLite 40 passed（`.artifacts/t11-final-*.log`）。本地 gates 通過不代表遠端 CPU、正式資料切換及回復演練已完成。
+- 下一步按 T11 §追加第 2–4 步：提交並推送候選，核對遠端 CI；建立不可變 Web image，停寫後從 D1 匯出／匯入／逐列對帳，部署 Web，再開 Worker 保存代理；正式 A13/A14、SSE、故障、重啟、backup／restore 及 Worker CPU 逐項驗。完成後更新本計畫的 T11／T12 最終狀態與 K3 判定。

@@ -1,13 +1,11 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import type { D1Database } from "@cloudflare/workers-types";
 
-const handlers = vi.hoisted(() => ({app:vi.fn(),session:vi.fn()}));
-vi.mock("./persistence/http",async importOriginal=>({...await importOriginal<typeof import("./persistence/http")>(),sessionHttp:handlers.session}));
+const handlers = vi.hoisted(() => ({app:vi.fn()}));
 import worker from "../worker";
 
-beforeEach(()=>{handlers.app.mockReset().mockResolvedValue(new Response("web"));handlers.session.mockReset().mockResolvedValue(new Response("session"));});
+beforeEach(()=>{handlers.app.mockReset().mockResolvedValue(new Response("web"));});
 function environment() {
-  return {MEAL_WEB:{fetch:handlers.app},DB:{} as D1Database,API_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})},SESSION_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})},AI_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})}};
+  return {MEAL_WEB:{fetch:handlers.app},API_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})},SESSION_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})},AI_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})}};
 }
 const request = (path:string,cookie="a".repeat(64)) => new Request(`https://meal.test${path}`,{method:path==="/api/plan" ? "GET":"POST",headers:{"cf-connecting-ip":"192.0.2.1",cookie:`__Host-meal_session=${cookie}`}});
 
@@ -16,7 +14,7 @@ test("rate-limited AI stops before domain or provider while saved-plan reads sti
   const blocked=await worker.fetch(request("/api/agent"),env);
   expect(blocked.status).toBe(429);
   expect(blocked.headers.get("retry-after")).toBe("60");
-  expect(handlers.session).not.toHaveBeenCalled();
+  expect(handlers.app).not.toHaveBeenCalled();
   expect((await worker.fetch(request("/api/plan"),env)).status).toBe(200);
 });
 
@@ -37,7 +35,7 @@ test("session creation and general API have independent limits and no raw identi
 });
 
 test("missing or failed limiter fails closed for API without disabling the page",async()=>{
-  expect((await worker.fetch(request("/api/agent"),{DB:{} as D1Database})).status).toBe(503);
+  expect((await worker.fetch(request("/api/agent"),{})).status).toBe(503);
   const env=environment();env.API_RATE_LIMITER.limit.mockRejectedValue(new Error("private binding failure"));
   const response=await worker.fetch(request("/api/agent"),env);
   expect(response.status).toBe(503);
@@ -59,18 +57,16 @@ test("private Python binding handles fixed routes without forwarding identity or
   expect(handlers.app).not.toHaveBeenCalled();
 });
 
-test("private binding is used for the session-owned Agent and propagates cancellation",async()=>{
+test("session-owned Agent reaches private Web with its cookie and propagates cancellation",async()=>{
   const upstream=vi.fn(async(_request:Request)=>new Response("data: fixture\n\n",{headers:{"content-type":"text/event-stream"}}));
-  const env={...environment(),MEAL_API:{fetch:upstream}};
-  await worker.fetch(request("/api/agent"),env);
-  const agent=handlers.session.mock.calls[0][5];
+  const env={...environment(),MEAL_WEB:{fetch:upstream}};
   const controller=new AbortController();
-  const response=await agent({safe:"server-owned-context"},controller.signal).catch(()=>new Response(null,{status:503}));
+  const response=await worker.fetch(new Request("https://meal.test/api/agent",{method:"POST",headers:{"cf-connecting-ip":"192.0.2.1",cookie:`__Host-meal_session=${"a".repeat(64)}`},body:'{"safe":"request"}',signal:controller.signal}),env);
   expect(response.status).toBe(200);
   const sent=upstream.mock.calls[0][0] as Request;
-  expect(sent.url).toBe("http://meal-api.internal/agent");
-  expect(await sent.json()).toEqual({safe:"server-owned-context"});
-  expect(sent.headers.has("cookie")).toBe(false);
+  expect(sent.url).toBe("http://meal-web.internal/api/agent");
+  expect(await sent.json()).toEqual({safe:"request"});
+  expect(sent.headers.get("cookie")).toBe(`__Host-meal_session=${"a".repeat(64)}`);
   controller.abort();
   expect(sent.signal.aborted).toBe(true);
 });
@@ -95,4 +91,44 @@ test("unknown API and Web POST cannot bypass Worker policy through the Node app"
   expect((await worker.fetch(new Request("https://meal.test/api/unlisted"),env)).status).toBe(404);
   expect((await worker.fetch(new Request("https://meal.test/",{method:"POST",body:"untrusted action"}),env)).status).toBe(405);
   expect(upstream).not.toHaveBeenCalled();
+});
+
+test("session routes reach only the private Web service with one scoped cookie and preserve Set-Cookie",async()=>{
+  const upstream=vi.fn(async(_request:Request)=>new Response('{"ok":true}',{status:201,headers:{"content-type":"application/json","set-cookie":"__Host-meal_session=fresh; HttpOnly; Secure; Path=/","cache-control":"no-store"}}));
+  const env={...environment(),MEAL_WEB:{fetch:upstream},MEAL_API:{fetch:vi.fn()}};
+  const response=await worker.fetch(new Request("https://meal.test/api/session?upstream=https://evil.test",{method:"POST",headers:{
+    "cf-connecting-ip":"192.0.2.1",origin:"https://meal.test","content-type":"application/json","x-meal-client":"1",
+    cookie:"other=secret; __Host-meal_session="+"a".repeat(64),authorization:"private-auth","x-forwarded-host":"evil.test",
+  },body:'{"schemaVersion":1}'}),env);
+  expect(response.status).toBe(201);
+  expect(response.headers.get("set-cookie")).toContain("__Host-meal_session=fresh");
+  expect(upstream).toHaveBeenCalledTimes(1);
+  const sent=upstream.mock.calls[0][0] as Request;
+  expect(sent.url).toBe("http://meal-web.internal/api/session");
+  expect(sent.headers.get("cookie")).toBe("__Host-meal_session="+"a".repeat(64));
+  expect(sent.headers.get("origin")).toBe("https://meal.test");
+  expect(sent.headers.get("x-forwarded-host")).toBe("meal.test");
+  expect(sent.headers.has("authorization")).toBe(false);
+  expect(sent.headers.has("cf-connecting-ip")).toBe(false);
+  expect(env.MEAL_API.fetch).not.toHaveBeenCalled();
+});
+
+test("cutover pause rejects every persistence route before forwarding while pages remain readable",async()=>{
+  const env={...environment(),MEAL_PERSISTENCE_PAUSED:"1"};
+  for (const path of ["/api/session","/api/plan","/api/plan/actions","/api/plan/preview","/api/agent"]) {
+    const response=await worker.fetch(request(path),env);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({error:"storage_unavailable"});
+  }
+  expect(handlers.app).not.toHaveBeenCalled();
+  expect((await worker.fetch(new Request("https://meal.test/"),env)).status).toBe(200);
+});
+
+test("unsupported persistence methods never reach the private Web service",async()=>{
+  const env=environment();
+  for(const [path,method] of [["/api/plan","POST"],["/api/agent","GET"],["/api/plan/actions","DELETE"],["/api/session","PUT"]]) {
+    const response=await worker.fetch(new Request(`https://meal.test${path}`,{method,headers:{"cf-connecting-ip":"192.0.2.1"}}),env);
+    expect(response.status).toBe(405);
+  }
+  expect(handlers.app).not.toHaveBeenCalled();
 });

@@ -1,8 +1,8 @@
 # Meal Prep Agent — MVP 產品規格
 
-更新：2026-09-28。狀態：產品方向已確認，營養政策與 D1 雲端保存已具體化為 v1 規劃；已開始實作，完成狀態見 implementation-plan.md。
+更新：2026-09-29。狀態：產品方向、營養政策與匿名雲端保存契約已確認；保存 API／資料正由 D1 遷往 Oracle SQLite，完成狀態見 implementation-plan.md。
 
-本文件定義第一版的使用情境、互動、資料契約與驗收。[營養政策 v1](nutrition-policy.md) 定義公式、產品預設及邊界；[技術架構](architecture.md) 補上模組、提案／D1 條件提交及整合 gates。Cloudflare 整合仍須依第 10 節驗證，不將文件規劃當成可運行成果。
+本文件定義第一版的使用情境、互動、資料契約與驗收。[營養政策 v1](nutrition-policy.md) 定義公式、產品預設及邊界；[技術架構](architecture.md) 補上模組、提案／SQLite 條件提交及整合 gates。Cloudflare 整合仍須依第 10 節驗證，不將文件規劃當成可運行成果。
 
 ## 1. 產品定位與已確認方向
 
@@ -99,7 +99,7 @@
 | PlanRevision | 生效目標、限制、餐點、庫存、購物及料理步驟勾選、來源／計算版本、衍生總量與清單 | 同一版的卡片、總覽與清單須一致；復原涵蓋整個快照 |
 | ChangeProposal | 所依據版本、使用者要求的修改範圍、餐點與衍生差異、衝突 | 過期提案不能覆蓋較新的計畫；須重新計算 |
 | Pantry / ShoppingItem | 食材識別、需要量、已確認庫存量、可相容單位、剩餘採買量 | 同一庫存跨菜只扣一次，不得產生負採買量 |
-| SavedPlan | schemaVersion、planId、遞增 revision、目前及前一份 PlanRevision、updatedAt／expiresAt；歸屬僅由服務端匿名身份決定 | 採用與復原須 D1 條件提交；不持久化 GoalDraft、聊天或尚未採用提案 |
+| SavedPlan | schemaVersion、planId、遞增 revision、目前及前一份 PlanRevision、updatedAt／expiresAt；歸屬僅由服務端匿名身份決定 | 採用與復原須 SQLite 條件提交；不持久化 GoalDraft、聊天或尚未採用提案 |
 
 每個營養欄位各自保存數值及來源／完整性；有熱量不代表已有蛋白質。來源至少區分合成資料、使用者輸入、可追溯參考資料。
 
@@ -144,7 +144,7 @@
 | A10 失敗恢復 | 模型或工具失敗有明確狀態與重試入口；免費額度用完時停用新的 AI 操作並說明原因，既有計畫可查看，不自動切換付費服務，不以 fixture 冒充 live 成功 |
 | A11 設備與備餐 | 僅有電鍋的案例不選需要未提供設備的食譜，共用設備不重疊占用，分裝量能對回餐次 |
 | A12 跨入口政策 | 不適用的估算輸入有正確分流，非法手動值也被擋；重新估算不直接改掉已確認目標 |
-| A13 雲端保存 | 同瀏覽器 Cookie 有效且服務可用時，關頁後恢復已採用計畫與一次復原；不同匿名身份不能讀寫他人計畫；不恢復聊天或問卷，D1 故障不冒稱保存成功 |
+| A13 雲端保存 | 同瀏覽器 Cookie 有效且服務可用時，關頁後恢復已採用計畫與一次復原；不同匿名身份不能讀寫他人計畫；不恢復聊天或問卷，儲存故障不冒稱保存成功 |
 | A14 多分頁與清除 | 同版本的兩次提交只有一次生效；另一頁過期提案被擋；清除或到期後，尚在執行的舊回覆不能恢復已刪計畫 |
 
 驗證分為可重跑的資料／計算測試，以及真實模型的多輪互動驗收。前者通過不能替代後者；各案例的執行證據與尚待項目記於 [實作計畫](implementation-plan.md)。
@@ -157,20 +157,20 @@
 |---|---|---|
 | 起始目標估算 | Mifflin–St Jeor 需另選活動係數；DRI 2023 有完整成人活動分級公式；動態模型需要長期追蹤 | 採 DRI 2023 EER 起始估算，減脂 −10%／增肌 +5% 為產品提案預設，另行確認；公式、蛋白質規則與獨立核算見 [營養政策](nutrition-policy.md) |
 | 數值與適用政策 | 自由填寫彈性高；版本化的適用域與驗證可讓兩入口行為一致 | `nutrition-v1` 已列公式／單位、支援範圍、容許差、缺值及 N1–N8 驗收；開放真實輸入前須完成實作驗證 |
-| 計畫保存 | 分頁記憶體最簡單但無關頁恢復；D1＋匿名 Cookie 免登入但需雲端可用；登入帳號支援跨裝置但增加管理 | 已確認 D1＋匿名識別 Cookie，保存已採用計畫與前一版、30 天未修改失效；不使用 IndexedDB。見第 10.2 節 |
+| 計畫保存 | 分頁記憶體最簡單但無關頁恢復；Oracle SQLite＋匿名 Cookie 免登入但需自管備份；登入帳號支援跨裝置但增加管理 | 已確認 Oracle SQLite＋匿名識別 Cookie，保存已採用計畫與前一版、30 天未修改失效；不使用 IndexedDB。見第 10.2 節 |
 | 免費模型 | 本機模型免 API 費但需要常駐硬體；雲端免費額度適合公開展示但有用量限制；付費 API 可擴充但不符合本次預算 | 固定 Workers AI `@cf/zai-org/glm-4.7-flash`，只用免費額度；正式工具與 AG-UI 已驗，日用量仍受帳戶共用額度約束 |
-| UI 與部署 | 全 TypeScript 可統一語言；Next.js＋Python API 增加跨語言契約，但能集中 Python 業務規則並沿用參考專案結構 | 已選 Next.js＋FastAPI／PydanticAI＋AG-UI，單一 repo、Modular Monolith；Workers 提供公開入口／D1／proxy，Next.js 與 Python 分別部署於 Oracle 專用容器。詳細責任與取捨見 [技術架構](architecture.md) |
+| UI 與部署 | 全 TypeScript 可統一語言；Next.js＋Python API 增加跨語言契約，但能集中 Python 業務規則並沿用參考專案結構 | 已選 Next.js＋FastAPI／PydanticAI＋AG-UI，單一 repo、Modular Monolith；Workers 提供公開入口／限流／proxy，Next.js 保存與 Python 計算分別部署於 Oracle 專用容器。詳細責任與取捨見 [技術架構](architecture.md) |
 
 Mifflin–St Jeor 的 [原研究](https://pubmed.ncbi.nlm.nih.gov/2305711/) 保留作方法比較；v1 使用的公式與來源集中在營養政策，不維護兩套可互相漂移的係數表。
 
 ### 10.1 免費模型與 Cloudflare 部署方案
 
-2026-09-28 已確認採用參考專案的 Web／Python 技術與模組結構；2026-09-29 已同意原生 Next.js 與 Python 部署 Oracle，T11 驗收進行中。詳細選型、公開契約與模組邊界集中於 [技術架構](architecture.md)，此處保留產品限制。
+2026-09-28 已確認採用參考專案的 Web／Python 技術與模組結構；2026-09-29 已同意原生 Next.js、Python 及保存資料部署 Oracle，T11 資料切換與重驗進行中。詳細選型、公開契約與模組邊界集中於 [技術架構](architecture.md)，此處保留產品限制。
 
 | 元件 | 選型與責任 |
 |---|---|
 | Web | Next.js＋TypeScript standalone；Oracle 專用容器，經 Cloudflare Worker／私有 VPC 提供公開入口 |
-| API／Agent | 獨立 Python 主機執行 FastAPI＋PydanticAI；官方 AGUIAdapter 傳送互動事件，Workers 負責匿名身份／D1 保存，並代理固定 Python 上游 |
+| API／Agent | Oracle 專用 Python 容器執行 FastAPI＋PydanticAI；官方 AGUIAdapter 傳送互動事件，Oracle Web 負責匿名身份／SQLite 保存，Workers 代理固定上游 |
 | 模型 | 固定 Workers AI `@cf/zai-org/glm-4.7-flash`，透過 OpenAI-compatible endpoint；正式工具、串流與 canonical 結果已在 T12 live 案例驗證 |
 | 計算與資料 | Python 集中餐單／份量／購物計算；身體問卷在瀏覽器估算，後端接收已確認目標。API 與工具共用 use cases |
 
@@ -186,28 +186,28 @@ Mifflin–St Jeor 的 [原研究](https://pubmed.ncbi.nlm.nih.gov/2305711/) 保�
 先以最小技術驗證確認整合可行性，再隨功能完成下列完整條件，結果記入 [技術架構](architecture.md) 第 9 節 K1–K4 並在此連結；不另建立待辦主表：
 
 1. Python 封裝、生成 API 契約與兩端數值邊界通過 K1；PydanticAI／Workers AI 工具往返及 AG-UI 串流、取消與錯誤通過 K2。
-2. Oracle Next.js 經 workerd／實際 Worker 入口驗證 hydration，Worker 驗 SSE proxy 及 CPU；Oracle Web／Python 各驗容量及私有入口隔離；D1 保存、匿名身份與服務中斷恢復通過 K3。
+2. Oracle Next.js 經 workerd／實際 Worker 入口驗證 hydration，Worker 驗 SSE proxy 及 CPU；Oracle Web／Python 各驗容量及私有入口隔離；SQLite 保存、匿名身份、資料遷移與服務中斷恢復通過 K3。
 3. 合成資料走 A1、A3、A5、A10，各至少三次 live 驗證繁體中文、工具參數與來源，量測 token／Neuron 消耗及模擬耗盡，通過 K4。
 
 若任一條件不符，回到對應 runtime、provider 或部署選型比較，不自行升級付費。Temporal、PostgreSQL、帳號及跨裝置保存不隨本次技術參考一起納入。
 
 ### 10.2 計畫保存與資料邊界
 
-本版採 Cloudflare D1＋匿名識別 Cookie，免登入，同一身份只保留一份已採用計畫及前一版。瀏覽器不使用 IndexedDB／localStorage 保存餐單；Cookie 只保存隨機身份憑證，實際內容放雲端。清除 Cookie 後無法找回舊餐單，不提供跨裝置登入。
+本版採 Oracle SQLite＋匿名識別 Cookie，免登入，同一身份只保留一份已採用計畫及前一版。瀏覽器不使用 IndexedDB／localStorage 保存餐單；Cookie 只保存隨機身份憑證，實際內容放 Oracle 專用 volume。清除 Cookie 後無法找回舊餐單，不提供跨裝置登入。
 
-- Worker 負責身份歸屬、CSRF 防護與 D1 讀寫；Python 負責餐單規則。服務端自行讀取 base 並驗證候選，不相信瀏覽器傳來的計算結果或 owner。Cookie 使用 HttpOnly／Secure／SameSite，不能傳給 Python／模型或記 log。
-- D1 保存目前及前一份 PlanRevision、已確認目標、來源快照、庫存與購物／料理勾選；不保存問卷、GoalDraft、聊天或未採用提案。重開需重填問卷才能重新估算。
+- Oracle Web 負責身份歸屬、CSRF 防護與 SQLite 讀寫；Worker 限流並固定轉送，Python 負責餐單規則。服務端自行讀取 base 並驗證候選，不相信瀏覽器傳來的計算結果或 owner。Cookie 使用 HttpOnly／Secure／SameSite，不能傳給 Python／模型或記 log。
+- SQLite 保存目前及前一份 PlanRevision、已確認目標、來源快照、庫存與購物／料理勾選；不保存問卷、GoalDraft、聊天或未採用提案。重開需重填問卷才能重新估算。
 - 所有採用、份量、鎖定、勾選及復原都以服務端 revision 條件寫入；current／previous 同列更新。復原建立新 revision 並消耗 previous；重複或舊提案不能覆蓋新狀態。網路中斷後先讀回確認結果，不能盲目重送產生第二次修改。
 - 成功修改才更新 `expiresAt = updatedAt + 30 × 24 小時`；查看不續期。到期立即拒絕讀寫，排程清理過期資料；原始身體輸入繼續只留當次分頁。Cookie 遺失不等於即時刪除雲端資料。
 - 「清除」撤銷目前 run，刪除伺服器匿名 session／餐單並清 Cookie；服務端成功前不顯示已清除。晚到請求不可 upsert 重建舊身份。重新開始取得全新身份。
-- D1 或保存 API 不可用時，已載入快照只供唯讀，採用／勾選／復原失敗保留原狀；重開需服務恢復才能載入。沒有本機保存 fallback。只有模型額度耗盡時，既有計畫讀寫及純計算仍可用。
+- SQLite 或保存 API 不可用時，已載入快照只供唯讀，採用／勾選／復原失敗保留原狀；重開需服務恢復才能載入。沒有本機保存 fallback。只有模型額度耗盡時，既有計畫讀寫及純計算仍可用。
 - 使用來源快照與政策版本，不因資料庫更新食譜而改舊計畫；未知 schema／損壞資料明確報錯，不靜默改寫。餐單回應 no-store，不共享快取。
 
-詳細 Cookie、CAS、operationId、端點與期限見 [架構第 7 節](architecture.md)。D1 與模型免費額度分開處理，皆不自動升級付費。
+詳細 Cookie、CAS、operationId、端點與期限見 [架構第 7 節](architecture.md)。儲存故障與模型免費額度分開處理，皆不自動升級付費。
 
 Agent 每次只接受必要的已確認目標、餐單／條件／待確認提案快照、當次訊息及有長度上限的本分頁對話上下文；不將原始身體表單混入上下文。服務端重新驗證資料與工具參數；PydanticAI run context 限該次 FastAPI 請求，不以服務全域記憶體保存跨使用者對話。應用 log 只記技術狀態與用量，不記訊息或身體欄位。自由聊天會送往模型，介面需與「身體表單只在本機計算」分別說明。
 
-A13／A14 的驗證包含關頁恢復、匿名身份隔離、D1 寫入失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；本地及部署證據見 implementation-plan.md T07／T11，完整 K3 的 CPU 驗收尚未收尾。
+A13／A14 的驗證包含關頁恢復、匿名身份隔離、SQLite 寫入失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；歷史 D1 與遷移後部署證據見 implementation-plan.md T07／T11，完整 K3 尚待切換後重驗。
 
 ## 11. 建議實作順序
 
@@ -215,7 +215,7 @@ A13／A14 的驗證包含關頁恢復、匿名身份隔離、D1 寫入失敗、�
 
 1. 依本規格與營養政策建立 Pydantic／OpenAPI 契約及生成 TS client，先驗證第 10.1 節的免費模型／Cloudflare 組合；讓兩種入口產生同一種已確認目標，建立 N1–N8 及 A1–A4、A8、A12 的合成資料案例。
 2. 建立 Python 餐單計算核心與瀏覽器身體估算：先驗證份量、營養、庫存、鎖定、提案與復原的一致性，覆蓋 A5–A9、A11。
-3. 接上 FastAPI／PydanticAI＋AG-UI 與 Next.js 介面：對話及卡片操作同一份狀態，接上 D1＋匿名 Cookie 保存，驗證 A10、A13、A14 與多輪修改。
+3. 接上 FastAPI／PydanticAI＋AG-UI 與 Next.js 介面：對話及卡片操作同一份狀態，接上匿名 Cookie 保存並在 T11 遷至 Oracle SQLite，驗證 A10、A13、A14 與多輪修改。
 4. 以兩種入口各走完完整展示；真模型驗收與合成資料驗證分別留下結果，再檢查部署與公開展示條件。
 
 實作前依第 10 節定案內容更新本規格。這是建議相依順序，不代表功能、真模型驗收或部署已完成。

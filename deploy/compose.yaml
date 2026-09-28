@@ -5,6 +5,15 @@ services:
     build:
       context: ..
       dockerfile: deploy/web.Dockerfile
+    environment:
+      MEAL_DB_PATH: /var/lib/meal-prep/plan.sqlite3
+      MEAL_API_ORIGIN: http://api:14318
+      MEAL_PUBLIC_ORIGIN: https://meal-prep-agent.fathompod.workers.dev
+    volumes:
+      - type: bind
+        source: ./data
+        target: /var/lib/meal-prep
+        bind: {create_host_path: false}
     networks: [private]
     restart: unless-stopped
     read_only: true
@@ -15,7 +24,7 @@ services:
     mem_limit: 512m
     cpus: 1
     healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:14319/').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:14319/api/internal/storage-health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 3s
       retries: 6

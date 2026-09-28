@@ -7,19 +7,6 @@
     "enable_request_signal"
   ],
   "main": "src/worker.ts",
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "meal-prep-local",
-      "database_id": "00000000-0000-0000-0000-000000000007",
-      "migrations_dir": "../../deploy/migrations"
-    }
-  ],
-  "triggers": {
-    "crons": [
-      "17 3 * * *"
-    ]
-  },
   "ratelimits": [
     {
       "name": "API_RATE_LIMITER",
@@ -49,14 +36,6 @@
   "env": {
     "production": {
       "name": "meal-prep-agent",
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "meal-prep-production",
-          "database_id": "eff8893a-6168-4d19-b64f-23aa1e378ec4",
-          "migrations_dir": "../../deploy/migrations"
-        }
-      ],
       "vpc_services": [
         {
           "binding": "MEAL_API",
@@ -92,12 +71,7 @@
             "period": 60
           }
         }
-      ],
-      "triggers": {
-        "crons": [
-          "17 3 * * *"
-        ]
-      }
+      ]
     }
   }
 }
