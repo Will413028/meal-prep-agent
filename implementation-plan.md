@@ -50,7 +50,7 @@
 | T07 | T01、T05、T06 | D1／匿名身份、原子採用與清除 | 本地驗收完成；部署案例由 T11 驗 |
 | T08 | T02、T07 | 雙入口與手動操作完整切片 | 本地驗收完成：兩入口、營養／比較、採用換菜恢復及故障唯讀；設計與正確性審查已修正 |
 | T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 已驗收：正式 tools／Worker／聊天、取消與故障恢復、兩輪提案及一次 GLM live 完整工具鏈；品質矩陣留 T12 |
-| T10 | T09 | 多分頁、隱私與限額故障測試 | 未開始 |
+| T10 | T09 | 多分頁、隱私與限額故障測試 | 已驗收（本地）：入口限流／body／run／token 預算、模式選擇／額度恢復、隱私／雙匿名context與mutation；真部署邊界留T11 |
 | T11 | T10；部署條件具備 | 實際環境與完整 K3 | 未開始 |
 | T12 | T11 | live K4 與完整 MVP 驗收 | 未開始 |
 
@@ -325,3 +325,24 @@
 - 沿用機制重新評估：官方 HttpAgent／adapter、request-scoped deps、UUID／D1 CAS 仍適合目前無帳號且不自建框架的約束；最多 12 則／每則 2000 字／合計 8000 字與 4 model requests／8 tools 保持有界。Worker／client 60 秒上限已存在；Python 整輪 deadline 與全入口 body limit 按既定 T10 補齊，未將單次 provider timeout 當整輪保護。
 - GLM live：前三次未通過，第三次明確因推理耗盡 2048 token。依官方 [GLM template](https://huggingface.co/zai-org/GLM-4.7-Flash/blob/main/chat_template.jinja#L85) 在固定 provider 設 `chat_template_kwargs.enable_thinking=false`，保留 max_tokens 2048。第四次正式 `/agent` 成功：find_recipes → build_proposal → proposal_ready → RUN_FINISHED，22.544 秒，input 58,892／output 2,030 tokens、3 requests／2 tool calls（`t09-live-run4.log`）。輸入均合成，未採用或部署；回覆有錯字及每日／三日標題混淆，T12 品質矩陣須改善並重驗，不能從一次 transport 成功宣稱品質完成。
 - 階段回歸命令：`uv run --project backend --frozen pytest backend/tests -q` 126 passed；`pnpm test:web` 98 passed；`MEAL_TEST_WORKER=1 pnpm test:e2e` 30 passed；`pnpm test:e2e` Node 12 passed。ruff check／format、mypy 35 source files、typecheck、contracts:check、test:contracts（Python 2／TS 2）、Next build 與 vinext build 通過。證據為 `.artifacts/t09-*-final.log` 與 `t09-review-fixed-build.log`；1440px 桌面並排與 390px 手機聊天截圖已人工檢視。T10–T12、遠端 CI／部署尚未完成。
+
+
+### T10 執行紀錄（2026-09-28）
+
+- 開工對帳 architecture §8：規格為 request 128 KiB、歷史最多8則；T09實作用12則且無body限制，依SSOT修正，不擅改規格。T09紀錄中的12是當時實際值，本階段收斂為8。
+- body正反邊界：Python exact128KiB接受／+1拒絕413、chunked與一般body、8則接受／9則422，首次3 failed＋3 passed（`t10-body-python-red.log`）→ GREEN。Web proxy同界線、未結束分段UTF-8與虛假Content-Length反例首次2 failed（`t10-body-web-red.log`）→ GREEN；超界會cancel reader，不先完整讀取再判定。
+- Python pure ASGI middleware在JSON parser前有界讀取；Web共用boundedBody供固定proxy及D1路由。補raw ASGI兩chunk即停止、不讀尾段；D1建立session exact128KiB成功，超界不新增row。沒有把Content-Length當唯一可信依據。
+- Python正式Agent整輪60秒deadline獨立於provider單次timeout；超時停止provider iterator，只發run_timeout，不能有RUN_FINISHED或可採用提案。429／500原始provider error body先真RED（共3failed，`t10-agent-limits-red.log`）；透過官方AGUIEventStream公開on_error擴充點轉固定model_quota／model_unavailable／run_limit代碼，避免將原始body／私密sentinel送往client。三案與原真TCP斷線共5 GREEN（`t10-agent-limits-green.log`），未重寫AG-UI解析器或框架。
+- 當前回歸：`uv run --project backend --frozen pytest backend/tests -q` 136 passed（`t10-python-current.log`）；`pnpm test:web` 102 passed（`t10-web-current.log`）；`MEAL_TEST_WORKER=1 pnpm test:e2e` 30 passed（`t10-workerd-current.log`）。vinext build、typecheck、mypy37sources、contracts:check／wire2+2通過。測試新增檔及兩個平台helper尚未commit；本階段還未完成。
+- 接續：公開限流、fixture/live與429耗盡UI、原始問卷全資料路徑／雙匿名context隔離、fake-clock deadline與關鍵限制mutation、獨立review及階段commit。Cloudflare原生Rate Limiting binding已查官方文件（https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/）：適合此展示入口，低延遲但按colo／eventually consistent，不能當費用硬上限；尚未加binding或改帳戶。原始記憶體limiter跨instance不一致，D1精確計數會增加讀寫，故建議原生binding＋既定免費平台上限；實際配置與閾值驗證接續，不宣稱已完成限流。
+
+- T10公開限流增量：Worker在路由前使用Cloudflare原生binding，API_RATE_LIMITER按雜湊來源300/min、SESSION_RATE_LIMITER按雜湊來源60/min、AI_RATE_LIMITER按雜湊匿名Cookie6/min；缺binding／binding故障回503，不讓API繞過，頁面仍可載入。各namespace為1431701–1431703、key有meal-prep前綴；正式部署前T11核對namespace未與帳戶其他Worker共用。閾值為展示初值，K4依實測再核對，不宣稱全域精確額度。`t10-rate-red.log` 3行為RED → Web105 GREEN（`t10-rate-web.log`）；workerd真binding第7次AI請求429而GET餐單仍404（陌生Cookie）通過，未呼叫live服務。
+- T10額度恢復增量：provider RUN_ERROR/model_quota及入口HTTP429均顯示明確原因，暫停新AI 60秒，表單不受影響；fake browser clock於59秒仍disabled、60秒可重試，不自動送請求。`t10-quota-ui-red.log` 2 RED→`t10-quota-ui-green.log` 2 GREEN。Python收到provider429後按app/process共用60秒暫停，直接重送在呼叫provider前429；`t10-quota-server-red.log` 1 RED→137 Python GREEN（`t10-quota-python-green.log`），fake monotonic驗159／160邊界與恢復。這是process級暫停，不取代Worker限流或帳戶免費上限；未自動切換model／fixture。
+- 此增量完整workerd33 passed（`MEAL_TEST_WORKER=1 pnpm test:e2e`，`t10-rate-workerd.log`）、Web105 passed、Python137 passed；typecheck、mypy37sources、contracts:check通過，vinext已含原生bindings build成功（`t10-quota-build.log`）。T10仍未階段提交：尚須fixture/live明確選擇（預設fixture）、input token預算、隱私全路徑與雙匿名Agent context、關鍵保護mutation、独立設計／正確性審查。模式不能只靠後端factory或「合成食材」字樣假裝已區分模型來源。
+
+- T10模式完成：新增forwardedProps.mode fixture/live，省略時固定fixture；正式app無憑證亦可跑明確標示的固定工具展示，不理解自由文字。live必須明確選擇，未配置／失敗回錯而非fallback；runtime capability由server判定，切換清除本頁history及未採用proposal。後端3行為RED（`t10-modes-red.log`）→GREEN；UI缺selector 1 RED（`t10-mode-ui-red.log`）→GREEN。fixture既有probe FunctionModel抽成產品專用fixture，不變更canonical／D1採用。run_usage帶mode，live腳本也須指定並核對live，避免預設展示被誤報為真模型成功。
+- 用量：新增每輪provider回報輸入120,000／輸出8,192 tokens預算，沿用4requests／8tools／60秒、單次2048。token gate不是預先精確計費保證。token測試最初只替換StreamedResponse.usage property，漏了get().usage，該輪RED不列產品證據；修正為真provider reported ModelResponse用量後8例GREEN，再獨立移除budget做mutation。公開OpenAI HTTP mock驗實際max_completion_tokens/max_tokens=2048、固定GLM與enable_thinking=false，Cookie及原始問卷不進provider；不是live成功證據。
+- 隱私／隔離：兩匿名D1快照並行轉給各自Agent，異主planId404、原始問卷extra400、D1不寫問卷；已有保護，無需改身份設計。引導估算→確認→D1→Agent的真瀏覽器請求逐一檢查age／heightCm／weightKg等原始keys不出現，同查SSR、browser console及local/session storage；Python provider exception sentinel不出現在response／captured stdout/stderr/log。`rg -n 'logging|print\(|instrument|trace|console\.' backend/src apps/web/src --glob '!*-validator.js'` 僅見生成HTTP trace method欄位；installed PydanticAI instrumentation default=False，未配置body trace exporter。外部主機實際logging／入口隔離由T11部署驗，不以本地測試代替。
+- Mutation與首次RED分開記錄：`.artifacts/t10-mutations-result.log` 逐一移除Python/Web body、8則history、2000字／8000總字、4requests／8tools、deadline、input/output token各預算，皆因對應assertion失敗；`t10-boundary-mutations-result.log` 移除CSRF／owner／問卷whitelist均被抓到。移除正式chat wrapper runId檢查時，foreign-run從「AI未完成」變成「提案已完成」而測試紅（`t10-mutation-runid.log`）；改provider cap2048→4096，實際HTTP assertion紅（`t10-mutation-provider-cap.log`）。全部finally還原，再跑整批回歸。fake browser clock驗59秒仍執行、60秒取消且無提案；真TCPprovider清理仍通過。
+- 獨立審查：design-review NO DESIGN FINDINGS，涵蓋官方adapter擴充、模式／fixture、身分／CAS、body雙邊界、deadline／abort、rate locality、provider暫停與費用宣稱。correctness 1改：缺planning原KeyError/500，新增必填guard；`t10-review-red.log` 1 RED→`t10-review-green.log` 4 GREEN。檢查repo與second-brain status/log，未有reviewer寫入或commit。
+- 最終驗證命令與結果集中 `.artifacts/t10-final-*.log`：`uv run --project backend --frozen pytest backend/tests -q` 153 passed、`pnpm test:web` 106 passed、`MEAL_TEST_WORKER=1 pnpm test:e2e` 35 passed、`pnpm test:e2e` Node 12 passed；ruff check／format、mypy（38 source files）、typecheck、contracts:check／wire（Python2＋TS2）、Next/vinext build 通過。1440px／390px 模式選擇與聊天畫面已目視檢查。階段僅聲稱本地T10驗收；T11真部署／logging／入口隔離與T12完整live品質、遠端CI仍未完成。

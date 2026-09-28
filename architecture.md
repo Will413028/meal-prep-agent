@@ -183,9 +183,9 @@ D1 免費方案超過每日讀寫限額會拒絕查詢，額度政策依 [官方
 
 預設 fixture、明確切換 live，不以預錄結果冒充模型成功。免費資格、每日 Neurons、耗盡行為以產品規格第 10.1 節為準，沒有付費 fallback。
 
-初始限制：每分頁一個 active run、request 128 KiB、單訊息 2,000 字、上下文最多 8 則／8,000 字、每輪最多 4 次模型呼叫／8 次工具／60 秒、單次輸出最多 2,048 tokens。這些是待 K4 調整的應用預算，不能當成帳戶費用硬上限。
+初始限制：每分頁一個 active run、request 128 KiB、單訊息 2,000 字、上下文最多 8 則／8,000 字、每輪最多 4 次模型呼叫／8 次工具／60 秒、單次輸出最多 2,048 tokens，整輪依 provider 回報用量限制輸入 120,000／輸出 8,192 tokens。token 用量 gate 在回報後判定，不能宣稱超界請求未送出或未消耗額度。這些是待 K4 調整的應用預算，不能當成帳戶費用硬上限。
 
-公開入口限流，Python 同時限制 body、執行次數與時間；隔離直接後端入口以免繞過 proxy。多 process semaphore 不是全域額度，須核對帳戶共用量。記錄技術狀態、延遲及用量，不記問卷、訊息或完整提案；tracing 也須檢查內容擷取設定。
+公開入口採 Cloudflare Rate Limiting bindings：一般 API 每來源 300/min、建立 session 每來源 60/min、AI 每匿名識別 6/min，識別雜湊後作 key；目前為待 K4 核對的展示初值。原生計數按 Cloudflare location 且為 eventually consistent，不作全域費用記帳。binding 缺失／故障拒絕 API；provider 429 另觸發 Python process 級 60 秒暫停，不自動重試。Python 同時限制 body、執行次數與時間；隔離直接後端入口以免繞過 proxy。多 process semaphore 不是全域額度，須核對帳戶共用量。記錄技術狀態、延遲及用量，不記問卷、訊息或完整提案；tracing 也須檢查內容擷取設定。
 
 Web／API／契約／政策版本不相容時停止新操作、提示重新載入並保留原資料。第一版不加入 Service Worker 或離線配餐引擎。
 

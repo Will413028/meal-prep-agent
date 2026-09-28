@@ -68,28 +68,9 @@ def create_probe_app(
 
 def create_synthetic_probe_app() -> FastAPI:
     """Explicit local test server; never a live model fallback."""
-    from pydantic_ai.messages import ToolReturnPart
-    from pydantic_ai.models.function import DeltaToolCall, FunctionModel
     from pydantic_ai.models.test import TestModel
 
-    async def planning_stream(messages: Any, _info: Any) -> AsyncIterator[Any]:
-        parts = messages[-1].parts
-        returned = {
-            part.tool_name for part in parts if isinstance(part, ToolReturnPart)
-        }
-        if "build_proposal" in returned:
-            yield "合成模型測試：提案已計算完成，尚未採用。"
-        else:
-            tool = "build_proposal" if "find_recipes" in returned else "find_recipes"
-            yield {
-                0: DeltaToolCall(
-                    name=tool, json_args="{}", tool_call_id=f"synthetic-{tool}"
-                )
-            }
-
-    app = create_probe_app(TestModel(call_tools=["transport_probe"]), tool_delay=1)
-    app.state.planning_model = FunctionModel(stream_function=planning_stream)
-    return app
+    return create_probe_app(TestModel(call_tools=["transport_probe"]), tool_delay=1)
 
 
 def create_live_probe_app() -> FastAPI:

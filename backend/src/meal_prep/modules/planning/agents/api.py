@@ -1,28 +1,42 @@
+import asyncio
 import json
+import math
 from collections.abc import AsyncIterator
 from decimal import Decimal
+from time import monotonic
 from typing import Any
 
-from ag_ui.core import CustomEvent, RunAgentInput
+from ag_ui.core import BaseEvent, CustomEvent, RunAgentInput, RunErrorEvent
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from pydantic_ai import AgentRunResult
 from pydantic_ai.messages import ToolCallPart
-from pydantic_ai.ui.ag_ui import AGUIAdapter
 from pydantic_ai.usage import UsageLimits
 
 from ..contracts import BuildProposalRequest
+from .fixture import fixture_model
 from .runtime import PlanningRun, planning_agent
+from .transport import PlanningAdapter
 
 router = APIRouter()
+RUN_TIMEOUT_SECONDS = 60.0
+
+
+class RuntimeStatus(BaseModel):
+    liveAvailable: bool
+
+
+@router.get("/api/v1/runtime", response_model=RuntimeStatus)
+def runtime(request: Request, response: Response) -> RuntimeStatus:
+    response.headers["cache-control"] = "no-store"
+    return RuntimeStatus(
+        liveAvailable=getattr(request.app.state, "planning_model", None) is not None
+    )
 
 
 @router.post("/agent")
 async def run(request: Request) -> Response:
-    model = getattr(request.app.state, "planning_model", None)
-    if model is None:
-        return JSONResponse({"error": "model_unavailable"}, status_code=503)
     try:
         raw = json.loads(await request.body(), parse_float=Decimal)
         incoming = RunAgentInput.model_validate(raw)
@@ -41,10 +55,13 @@ async def run(request: Request) -> Response:
             incoming.state != {}
             or incoming.tools
             or incoming.context
-            or not 1 <= len(incoming.messages) <= 12
+            or not 1 <= len(incoming.messages) <= 8
             or incoming.messages[-1].role != "user"
             or sum(map(len, texts)) > 8000
-            or set(incoming.forwarded_props) != {"planning"}
+            or "planning" not in incoming.forwarded_props
+            or set(incoming.forwarded_props) - {"planning", "mode"}
+            or incoming.forwarded_props.get("mode", "fixture")
+            not in {"fixture", "live"}
         ):
             raise ValueError("unsupported client context")
         planning = BuildProposalRequest.model_validate(
@@ -56,8 +73,26 @@ async def run(request: Request) -> Response:
             raise ValueError("context mismatch")
     except (ValueError, TypeError, AttributeError, ValidationError):
         return JSONResponse({"error": "invalid_agent_request"}, status_code=422)
+    mode = incoming.forwarded_props.get("mode", "fixture")
+    model = (
+        fixture_model()
+        if mode == "fixture"
+        else getattr(request.app.state, "planning_model", None)
+    )
+    if model is None:
+        return JSONResponse({"error": "model_unavailable"}, status_code=503)
+    retry_at = getattr(request.app.state, "model_retry_at", 0.0)
+    if mode == "live" and retry_at > monotonic():
+        return JSONResponse(
+            {"error": "model_quota"},
+            status_code=429,
+            headers={
+                "retry-after": str(math.ceil(retry_at - monotonic())),
+                "cache-control": "no-store",
+            },
+        )
     deps = PlanningRun(planning)
-    adapter = AGUIAdapter(agent=planning_agent(model), run_input=incoming)
+    adapter = PlanningAdapter(agent=planning_agent(model), run_input=incoming)
 
     async def complete(result: AgentRunResult[Any]) -> AsyncIterator[CustomEvent]:
         usage = result.usage
@@ -66,6 +101,7 @@ async def run(request: Request) -> Response:
             value={
                 "runId": incoming.run_id,
                 "model": model.model_name,
+                "mode": mode,
                 "inputTokens": usage.input_tokens,
                 "outputTokens": usage.output_tokens,
                 "requests": usage.requests,
@@ -98,11 +134,28 @@ async def run(request: Request) -> Response:
                 },
             )
 
-    return adapter.streaming_response(
-        adapter.run_stream(
-            deps=deps,
-            on_complete=complete,
-            usage_limits=UsageLimits(request_limit=4, tool_calls_limit=8),
-            model_settings={"max_tokens": 2048, "timeout": 60},
-        )
-    )
+    async def bounded_run() -> AsyncIterator[BaseEvent]:
+        try:
+            async with asyncio.timeout(RUN_TIMEOUT_SECONDS):
+                async for event in adapter.run_stream(
+                    deps=deps,
+                    on_complete=complete,
+                    usage_limits=UsageLimits(
+                        request_limit=4,
+                        tool_calls_limit=8,
+                        input_tokens_limit=120000,
+                        output_tokens_limit=8192,
+                    ),
+                    model_settings={"max_tokens": 2048, "timeout": 60},
+                ):
+                    if (
+                        mode == "live"
+                        and isinstance(event, RunErrorEvent)
+                        and event.code == "model_quota"
+                    ):
+                        request.app.state.model_retry_at = monotonic() + 60
+                    yield event
+        except TimeoutError:
+            yield RunErrorEvent(message="run_timeout", code="run_timeout")
+
+    return adapter.streaming_response(bounded_run())

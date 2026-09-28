@@ -89,13 +89,14 @@ class AgentMessage(Contract):
 
 class AgentForwardedProps(Contract):
     planning: PreviewRequest
+    mode: Literal["fixture", "live"] = "fixture"
 
 
 class AgentRunRequest(Contract):
     protocolVersion: Literal["1.0"]
     threadId: UUID
     runId: UUID
-    messages: tuple[AgentMessage, ...] = Field(min_length=1, max_length=12)
+    messages: tuple[AgentMessage, ...] = Field(min_length=1, max_length=8)
     state: dict[str, object] = Field(max_length=0)
     tools: tuple[object, ...] = Field(max_length=0)
     context: tuple[object, ...] = Field(max_length=0)

@@ -16,7 +16,7 @@ def payload():
         "state": {},
         "tools": [],
         "context": [],
-        "forwardedProps": {"planning": planning},
+        "forwardedProps": {"planning": planning, "mode": "live"},
     }
 
 

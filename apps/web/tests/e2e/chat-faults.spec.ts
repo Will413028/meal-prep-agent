@@ -142,3 +142,84 @@ test("cancelled AI completion cannot clear a newer form operation", async ({page
     await expect(page.getByText("正在產生三天提案…",{exact:true})).toBeVisible();
   } finally {releaseRead();releasePreview();}
 });
+
+for (const kind of ["provider","entry"] as const) test(`${kind} quota pauses AI without blocking deterministic planning`,async({page})=>{
+  const chat=await openChat(page);
+  await page.clock.install();
+  let calls=0;
+  await page.route("**/api/agent",async route=>{
+    calls++;
+    if(kind==="entry") {await route.fulfill({status:429,headers:{"retry-after":"60"},json:{error:"rate_limited"}});return;}
+    const body=route.request().postDataJSON();
+    await route.fulfill({contentType:"text/event-stream",body:[{type:"RUN_STARTED",threadId:body.threadId,runId:body.runId},{type:"RUN_ERROR",message:"model_quota",code:"model_quota"}].map(event=>`data: ${JSON.stringify(event)}\n\n`).join("")});
+  });
+  await chat.getByRole("button",{name:"傳送",exact:true}).click();
+  await expect(chat.getByRole("status")).toContainText("額度或頻率限制");
+  await expect(chat.getByRole("button",{name:"重試 AI"})).toBeDisabled();
+  await expect(page.getByRole("button",{name:"產生三天提案"})).toBeEnabled();
+  await page.clock.fastForward(59_000);
+  await expect(chat.getByRole("button",{name:"重試 AI"})).toBeDisabled();
+  expect(calls).toBe(1);
+  await page.clock.fastForward(1000);
+  await expect(chat.getByRole("button",{name:"重試 AI"})).toBeEnabled();
+  await page.getByRole("button",{name:"產生三天提案"}).click();
+  await expect(page.getByRole("region",{name:"餐單提案預覽"})).toBeVisible();
+  expect(calls).toBe(1);
+});
+
+test("workerd rate-limit binding rejects the seventh AI attempt without touching saved-plan reads",async({request})=>{
+  const token=crypto.randomUUID().replaceAll("-","").repeat(2);
+  const headers={cookie:`__Host-meal_session=${token}`,"content-type":"application/json"};
+  for(let attempt=0;attempt<6;attempt++) {
+    const response=await request.post("/api/agent",{headers,data:{}});
+    expect(response.status()).toBe(403);
+  }
+  const limited=await request.post("/api/agent",{headers,data:{}});
+  expect(limited.status()).toBe(429);
+  expect(limited.headers()["retry-after"]).toBe("60");
+  expect((await request.get("/api/plan",{headers})).status()).toBe(404);
+});
+
+test("fixture is visible by default and switching to live is explicit without fallback",async({page})=>{
+  await page.route("**/api/v1/runtime",route=>route.fulfill({json:{liveAvailable:true}}));
+  const chat=await openChat(page);
+  const mode=chat.getByLabel("模型模式");
+  await expect(mode).toHaveValue("fixture");
+  await expect(chat).toContainText("不理解自由文字");
+  const modes:string[]=[];
+  await page.route("**/api/agent",async route=>{
+    const body=route.request().postDataJSON();modes.push(body.forwardedProps.mode);
+    if(body.forwardedProps.mode==="fixture") {await route.continue();return;}
+    await route.fulfill({status:503,json:{error:"model_unavailable"}});
+  });
+  await chat.getByRole("button",{name:"傳送",exact:true}).click();
+  await expect(page.getByRole("region",{name:"餐單提案預覽"})).toBeVisible();
+  await mode.selectOption("live");
+  await expect(page.getByRole("region",{name:"餐單提案預覽"})).toHaveCount(0);
+  await expect(chat).toContainText("真模型");
+  await chat.getByLabel("想如何安排餐點？").fill("重新安排三天");
+  await chat.getByRole("button",{name:"傳送",exact:true}).click();
+  await expect(chat.getByRole("status")).toContainText("AI 未完成");
+  expect(modes).toEqual(["fixture","live"]);
+  await expect(mode).toHaveValue("live");
+  await expect(page.getByRole("region",{name:"餐單提案預覽"})).toHaveCount(0);
+});
+
+test("browser clock aborts a stalled run at sixty seconds without publishing a proposal",async({page})=>{
+  const chat=await openChat(page);
+  await page.clock.install();
+  let seen!:()=>void,release!:()=>void;
+  const requested=new Promise<void>(resolve=>{seen=resolve;});
+  const barrier=new Promise<void>(resolve=>{release=resolve;});
+  await page.route("**/api/agent",async route=>{seen();await barrier;await route.fulfill({status:503,json:{error:"late"}}).catch(()=>{});});
+  await chat.getByRole("button",{name:"傳送",exact:true}).click();
+  await requested;
+  try {
+    await page.clock.fastForward(59_000);
+    await expect(chat.getByRole("button",{name:"取消 AI 執行"})).toBeVisible();
+    await page.clock.fastForward(1000);
+    await expect(chat.getByRole("status")).toContainText("AI 未完成");
+    await expect(page.getByRole("region",{name:"餐單提案預覽"})).toHaveCount(0);
+    await expect(chat.getByRole("button",{name:"重試 AI"})).toBeEnabled();
+  } finally {release();}
+});

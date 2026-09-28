@@ -18,23 +18,46 @@ export function PlanningChat({disabled,prepare,onProposal,onBusy,onInvalidate}: 
   onBusy: (busy: boolean) => void;
   onInvalidate: () => void;
 }) {
+  const [mode,setMode] = useState<"fixture" | "live">("fixture");
+  const [liveAvailable,setLiveAvailable] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/v1/runtime",{cache:"no-store",signal:controller.signal})
+      .then(async response => response.ok ? response.json() : null)
+      .then(value => {if (!controller.signal.aborted) setLiveAvailable(value?.liveAvailable === true);})
+      .catch(() => {});
+    return () => controller.abort();
+  },[]);
   const [messages,setMessages] = useState<Message[]>([]);
   const [draft,setDraft] = useState("");
   const [status,setStatus] = useState("尚未傳送訊息。");
   const [running,setRunning] = useState(false);
   const [partial,setPartial] = useState("");
   const [retry,setRetry] = useState<string | null>(null);
+  const [quotaUntil,setQuotaUntil] = useState<number | null>(null);
+  const cooling = quotaUntil !== null;
+  useEffect(() => {
+    if (quotaUntil === null) return;
+    const timer = setTimeout(() => setQuotaUntil(null),Math.max(0,quotaUntil-Date.now()));
+    return () => clearTimeout(timer);
+  },[quotaUntil]);
   const active = useRef<ActiveRun | null>(null);
   useEffect(() => () => {if (active.current) {active.current.cancelled=true;active.current.agent.abortRun();active.current=null;}},[]);
 
   async function send(text: string) {
-    if (!text.trim() || running || disabled) return;
+    if (!text.trim() || running || disabled || cooling) return;
     const runId = crypto.randomUUID();
     const {planning,csrf} = prepare(runId);
-    const history = [...messages,{id:crypto.randomUUID(),role:"user" as const,content:text.trim()}].slice(-12);
+    const history = [...messages,{id:crypto.randomUUID(),role:"user" as const,content:text.trim()}].slice(-8);
     while (history.length > 1 && history.reduce((total,item) => total+[...item.content].length,0) > 8000) history.shift();
+    let quotaDelay = 0;
     const agent = new HttpAgent({url:"/api/agent",threadId:planning.context.planId,debug:false,
-      headers:{"x-meal-client":"1","x-meal-csrf":csrf},initialMessages:history});
+      headers:{"x-meal-client":"1","x-meal-csrf":csrf},initialMessages:history,
+      fetch:async (input,init) => {
+        const response = await fetch(input,init);
+        if (response.status === 429) quotaDelay=60_000;
+        return response;
+      }});
     const run = {agent,runId,cancelled:false};
     active.current?.agent.abortRun();active.current=run;
     setMessages(history);setDraft("");setPartial("");setRunning(true);setRetry(null);setStatus("AI 正在處理…");onInvalidate();onBusy(true);
@@ -46,10 +69,10 @@ export function PlanningChat({disabled,prepare,onProposal,onBusy,onInvalidate}: 
     const current = () => active.current === run && !run.cancelled;
     const timeout = setTimeout(() => {run.agent.abortRun();},60_000);
     try {
-      await agent.runAgent({runId,forwardedProps:{planning}}, {
+      await agent.runAgent({runId,forwardedProps:{planning,mode}}, {
         onEvent({event}) {
           if (!current()) return;
-          if (event.type === "RUN_ERROR") {failure=true;proposal=null;}
+          if (event.type === "RUN_ERROR") {failure=true;proposal=null;if (event.code === "model_quota") quotaDelay=60_000;}
           if (event.type === "RUN_FINISHED" && event.runId === runId) finished=true;
           if (event.type === "TEXT_MESSAGE_CONTENT") {answer+=event.delta;setPartial(answer);}
           if (event.type === "CUSTOM" && event.name === "proposal_ready") {
@@ -75,7 +98,14 @@ export function PlanningChat({disabled,prepare,onProposal,onBusy,onInvalidate}: 
       if (proposal) {await onProposal(proposal,current);if (current()) setStatus("提案已完成，請預覽後決定是否採用。");}
       else setStatus(reason ? planningFailure(reason) : "回覆已完成；尚無可採用提案。");
     } catch {
-      if (current()) {setRetry(text);setStatus("AI 未完成，未產生可採用結果。可重試，或使用餐單表單。");onInvalidate();}
+      if (current()) {
+        setRetry(text);
+        if (quotaDelay) {
+          setQuotaUntil(Date.now()+quotaDelay);
+          setStatus("AI 遇到額度或頻率限制，暫停新 AI 操作 60 秒；之後可重試檢查是否恢復。既有餐單與表單仍可使用，未切換模型。");
+        } else setStatus("AI 未完成，未產生可採用結果。可重試，或使用餐單表單。");
+        onInvalidate();
+      }
     } finally {
       clearTimeout(timeout);
       if (active.current === run) {setRunning(false);onBusy(false);setPartial("");}
@@ -90,15 +120,21 @@ export function PlanningChat({disabled,prepare,onProposal,onBusy,onInvalidate}: 
   }
 
   return <section aria-label="備餐對話"><h2>備餐對話</h2>
-    <p>自由聊天會傳送至模型；身體問卷仍只在本機計算。對話不會隨餐單保存。</p>
+    <label>模型模式<select value={mode} disabled={disabled || running} onChange={event => {
+      const next = event.target.value === "live" ? "live" : "fixture";
+      setMode(next);setMessages([]);setPartial("");setRetry(null);setQuotaUntil(null);onInvalidate();
+      setStatus("已切換模式，尚未傳送訊息。");
+    }}><option value="fixture">合成展示</option><option value="live" disabled={!liveAvailable}>真模型 · Cloudflare GLM-4.7-flash</option></select></label>
+    <p>{mode === "fixture" ? "合成展示：只執行固定工具流程，不理解自由文字。請用餐單表單調整條件；不呼叫真模型。" : "真模型：訊息將傳送至 Cloudflare GLM-4.7-flash；失敗不自動切換展示模式。"}</p>
+    <p>{mode === "live" ? "自由聊天會傳送至模型；" : "展示輸入不會傳送至真模型；"}身體問卷只在本機計算。對話不會隨餐單保存。</p>
     <ol>{messages.map(message => <li key={message.id}>{message.role === "user" ? "你" : "助理"}：{message.content}</li>)}</ol>
     {partial && <p>{partial}</p>}
     <p role="status">{status}</p>
     <form onSubmit={event => {event.preventDefault();void send(draft);}}>
-      <label>想如何安排餐點？<textarea maxLength={2000} value={draft} disabled={disabled || running} onChange={event => setDraft(event.target.value)} /></label>
-      <button disabled={disabled || running || !draft.trim()}>傳送</button>
+      <label>想如何安排餐點？<textarea maxLength={2000} value={draft} disabled={disabled || running || cooling} onChange={event => setDraft(event.target.value)} /></label>
+      <button disabled={disabled || running || cooling || !draft.trim()}>傳送</button>
     </form>
     {running && <button onClick={cancel}>取消 AI 執行</button>}
-    {retry && <button disabled={disabled || running} onClick={() => void send(retry)}>重試 AI</button>}
+    {retry && <button disabled={disabled || running || cooling} onClick={() => void send(retry)}>重試 AI</button>}
   </section>;
 }

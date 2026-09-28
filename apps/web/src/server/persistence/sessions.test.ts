@@ -367,3 +367,38 @@ test("Agent proxy replaces caller context with the owned D1 base and strips cook
   expect((await send({...body,runId:crypto.randomUUID()})).status).toBe(400);
   expect((await readSession(db,headers.cookie.split("=")[1],now))?.revision).toBe(1);
 });
+
+test("session creation accepts the byte boundary but rejects oversized bodies before creating a row", async () => {
+  const headers = {origin:"https://meal.test","content-type":"application/json","x-meal-client":"1"};
+  const count = async () => (await db.prepare("SELECT COUNT(*) AS n FROM plan_sessions").first<{n:number}>())!.n;
+  const before = await count();
+  for (const extra of [0,1]) {
+    const response = await sessionHttp(new Request("https://meal.test/api/session",{method:"POST",headers,body:'{"schemaVersion":1}'.padEnd(128*1024+extra," ")}),db,()=>now);
+    expect(response.status).toBe(extra ? 413 : 201);
+  }
+  expect(await count()).toBe(before+1);
+});
+
+test("two anonymous Agent runs receive only their owned snapshot and reject questionnaire fields",async()=>{
+  const users=await Promise.all([initializeHttp(),initializeHttp()]);
+  const requests=[];
+  for(const [index,user] of users.entries()) {
+    const evaluation=structuredClone(user.evaluation);evaluation.candidate.meals[0].locked=index===1;
+    const validator:ProposalValidator=async input=>({...input.context,evaluation,diff:[],shoppingDiff:[],prepDiff:[],violations:[]});
+    await sessionHttp(new Request("https://meal.test/api/plan/actions",{method:"POST",headers:user.headers,body:JSON.stringify(user.payload)}),db,()=>now,validator);
+    const runId=crypto.randomUUID();
+    requests.push({protocolVersion:"1.0",threadId:user.payload.planId,runId,messages:[{id:"m",role:"user",content:"合成展示"}],state:{},tools:[],context:[],forwardedProps:{mode:"fixture",planning:{schemaVersion:1,goal:evaluation.candidate.goal,constraints:evaluation.candidate.constraints,context:{planId:user.payload.planId,sessionGeneration:user.payload.sessionGeneration,baseRevision:1,runId,scope:user.payload.action.scope}}}});
+  }
+  const contexts:Record<string,unknown>={};
+  const run=async(input:import("./http").AgentInput)=>{contexts[input.threadId]=input.forwardedProps.planning.base;return new Response("synthetic");};
+  const send=(index:number,body:unknown)=>sessionHttp(new Request("https://meal.test/api/agent",{method:"POST",headers:users[index].headers,body:JSON.stringify(body)}),db,()=>now,undefined,undefined,run);
+  expect((await Promise.all(requests.map((body,index)=>send(index,body)))).map(response=>response.status)).toEqual([200,200]);
+  expect(contexts[requests[0].threadId]).toMatchObject({candidate:{meals:[expect.objectContaining({locked:false}),...users[0].evaluation.candidate.meals.slice(1)]}});
+  expect(contexts[requests[1].threadId]).toMatchObject({candidate:{meals:[expect.objectContaining({locked:true}),...users[1].evaluation.candidate.meals.slice(1)]}});
+  expect((await send(0,requests[1])).status).toBe(404);
+  const raw={...requests[0],forwardedProps:{...requests[0].forwardedProps,planning:{...requests[0].forwardedProps.planning,age:37,height:171.3,weight:68.7}}};
+  expect((await send(0,raw)).status).toBe(400);
+  expect(Object.keys(contexts)).toHaveLength(2);
+  const stored=await db.prepare("SELECT currentJson,previousJson FROM plan_sessions WHERE planId=?").bind(requests[0].threadId).first();
+  expect(JSON.stringify(stored)).not.toMatch(/"(?:age|height|weight)"/);
+});

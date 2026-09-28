@@ -39,6 +39,15 @@
       "AgentForwardedProps": {
         "additionalProperties": false,
         "properties": {
+          "mode": {
+            "default": "fixture",
+            "enum": [
+              "fixture",
+              "live"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
           "planning": {
             "$ref": "#/components/schemas/PreviewRequest"
           }
@@ -97,7 +106,7 @@
             "items": {
               "$ref": "#/components/schemas/AgentMessage"
             },
-            "maxItems": 12,
+            "maxItems": 8,
             "minItems": 1,
             "title": "Messages",
             "type": "array"
@@ -2404,6 +2413,19 @@
         "title": "RecipeStep",
         "type": "object"
       },
+      "RuntimeStatus": {
+        "properties": {
+          "liveAvailable": {
+            "title": "Liveavailable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "liveAvailable"
+        ],
+        "title": "RuntimeStatus",
+        "type": "object"
+      },
       "SessionInit": {
         "additionalProperties": false,
         "properties": {
@@ -3133,6 +3155,24 @@
         "tags": [
           "recipes"
         ]
+      }
+    },
+    "/api/v1/runtime": {
+      "get": {
+        "operationId": "runtime_api_v1_runtime_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Runtime"
       }
     },
     "/health": {

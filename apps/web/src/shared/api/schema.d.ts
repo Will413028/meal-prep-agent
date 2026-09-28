@@ -188,6 +188,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Runtime */
+        get: operations["runtime_api_v1_runtime_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -227,6 +244,12 @@ export interface components {
         };
         /** AgentForwardedProps */
         AgentForwardedProps: {
+            /**
+             * Mode
+             * @default fixture
+             * @enum {string}
+             */
+            mode: "fixture" | "live";
             planning: components["schemas"]["PreviewRequest"];
         };
         /** AgentMessage */
@@ -1142,6 +1165,11 @@ export interface components {
             /** Minutes */
             minutes: number;
         };
+        /** RuntimeStatus */
+        RuntimeStatus: {
+            /** Liveavailable */
+            liveAvailable: boolean;
+        };
         /** SessionInit */
         SessionInit: {
             /**
@@ -1609,6 +1637,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Recipe"][];
+                };
+            };
+        };
+    };
+    runtime_api_v1_runtime_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RuntimeStatus"];
                 };
             };
         };

@@ -1,3 +1,4 @@
+import { boundedBody, RequestTooLarge } from "../request-limits";
 import type { D1Database } from "@cloudflare/workers-types";
 import type { paths } from "../../shared/api/schema";
 import { validateBuildResult, validateEvaluation, validateProposal } from "../../shared/api/validate";
@@ -14,7 +15,7 @@ export type ProposalOutput = paths["/api/v1/proposals/validate"]["post"]["respon
 export type ProposalValidator = (input: ProposalInput, signal: AbortSignal) => Promise<ProposalOutput>;
 export type BuildInput = paths["/api/v1/proposals/build"]["post"]["requestBody"]["content"]["application/json"];
 export type BuildOutput = paths["/api/v1/proposals/build"]["post"]["responses"][200]["content"]["application/json"];
-export type AgentInput = Omit<AgentRunRequest,"forwardedProps"> & {forwardedProps:{planning:BuildInput}};
+export type AgentInput = Omit<AgentRunRequest,"forwardedProps"> & {forwardedProps:{planning:BuildInput;mode?:"fixture" | "live"}};
 export type AgentRunner = (input: AgentInput, signal: AbortSignal) => Promise<Response>;
 export type ProposalBuilder = (input: BuildInput, signal: AbortSignal) => Promise<BuildOutput>;
 
@@ -71,13 +72,14 @@ export function sessionCookie(token: string, expiresAt: number, now: number): st
 export async function sessionHttp(request: Request, db: D1Database, clock: () => number = Date.now, validator?: ProposalValidator, builder?: ProposalBuilder, agent?: AgentRunner): Promise<Response> {
   try {
     const url = new URL(request.url);
+    const bodyText = request.method === "POST" ? await boundedBody(request) : "";
     if (request.method === "POST" && url.pathname === "/api/agent") {
       writeOrigin(request);
       const token = cookieToken(request);
       if (!token) throw new PersistenceError(404,"not_found");
       await checkCsrf(request,token);
       let body;
-      try { body = validateAgentRun(parseActionJson(await request.text())); }
+      try { body = validateAgentRun(parseActionJson(bodyText)); }
       catch { throw new PersistenceError(400,"invalid_request"); }
       if (body.messages.at(-1)?.role !== "user" || body.messages.reduce((total,message) => total + [...message.content].length,0) > 8000) throw new PersistenceError(400,"invalid_request");
       const {schemaVersion: _version,...planning} = body.forwardedProps.planning;
@@ -89,7 +91,7 @@ export async function sessionHttp(request: Request, db: D1Database, clock: () =>
       const state = await stateFromRow(row,token);
       if (!agent) throw new PersistenceError(503,"model_unavailable");
       let upstream;
-      try { upstream = await agent({...body,forwardedProps:{planning:{...planning,base:state.current}}},request.signal); }
+      try { upstream = await agent({...body,forwardedProps:{...body.forwardedProps,planning:{...planning,base:state.current}}},request.signal); }
       catch { throw new PersistenceError(503,"model_unavailable"); }
       const headers = new Headers({"content-type":upstream.headers.get("content-type") ?? "application/json","cache-control":"no-store",vary:"Cookie"});
       return new Response(upstream.body,{status:upstream.status,headers});
@@ -100,7 +102,7 @@ export async function sessionHttp(request: Request, db: D1Database, clock: () =>
       if (!token) throw new PersistenceError(404,"not_found");
       await checkCsrf(request,token);
       let body;
-      try { body = validatePreviewRequest(parseActionJson(await request.text())); }
+      try { body = validatePreviewRequest(parseActionJson(bodyText)); }
       catch { throw new PersistenceError(400,"invalid_request"); }
       const row = await readSession(db,token,clock(),body.context.planId);
       if (!row) throw new PersistenceError(404,"not_found");
@@ -118,7 +120,7 @@ export async function sessionHttp(request: Request, db: D1Database, clock: () =>
     }
     if (request.method === "POST" && url.pathname === "/api/session") {
       writeOrigin(request);
-      try { validateSessionInit(parseActionJson(await request.text())); } catch { throw new PersistenceError(400,"invalid_request"); }
+      try { validateSessionInit(parseActionJson(bodyText)); } catch { throw new PersistenceError(400,"invalid_request"); }
       const now = clock();
       const {token,row} = await createSession(db,now);
       return response(await stateFromRow(row,token),201,sessionCookie(token,row.expiresAt,now));
@@ -144,7 +146,7 @@ export async function sessionHttp(request: Request, db: D1Database, clock: () =>
       if (!token) throw new PersistenceError(404,"not_found");
       await checkCsrf(request,token);
       let body;
-      try { body = validateAction(parseActionJson(await request.text())); } catch { throw new PersistenceError(400,"invalid_request"); }
+      try { body = validateAction(parseActionJson(bodyText)); } catch { throw new PersistenceError(400,"invalid_request"); }
       const row = await readSession(db,token,clock(),body.planId);
       if (!row) throw new PersistenceError(404,"not_found");
       const current = await stateFromRow(row,token);
@@ -215,6 +217,7 @@ export async function sessionHttp(request: Request, db: D1Database, clock: () =>
     }
     throw new PersistenceError(404,"not_found");
   } catch (error) {
+    if (error instanceof RequestTooLarge) return response({error:"request_too_large"},413);
     return error instanceof PersistenceError ? response({error:error.code},error.status) : response({error:"storage_unavailable"},503);
   }
 }

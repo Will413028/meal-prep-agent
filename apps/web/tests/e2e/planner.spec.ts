@@ -70,6 +70,10 @@ test("manual goal creates a preview, adopts a plan, replaces one meal and reopen
 });
 
 test("guided estimation reaches the same preview and saved goal contract", async ({page}) => {
+  const requests: string[]=[];
+  const logs: string[]=[];
+  page.on("request",request=>{if(request.postData()) requests.push(request.postData()!);});
+  page.on("console",message=>logs.push(message.text()));
   await page.goto("/");
   await page.getByRole("button",{name:"幫我設定目標"}).click();
   await page.getByLabel("年齡（歲）").fill("30");
@@ -97,6 +101,19 @@ test("guided estimation reaches the same preview and saved goal contract", async
   expect(state.current.candidate.goal.requested.kcal).toBe(2000);
   expect(state.current.candidate.goal).not.toHaveProperty("weightKg");
   expect(state.current.candidate.goal).not.toHaveProperty("age");
+  const chat=page.getByRole("region",{name:"備餐對話"});
+  await chat.getByLabel("想如何安排餐點？").fill("合成隱私驗證");
+  await chat.getByRole("button",{name:"傳送",exact:true}).click();
+  await expect(chat.getByRole("status")).toContainText("提案已完成");
+  const forbidden=/"(?:age|heightCm|weightKg|classification|activity|training|pregnantOrLactating|needsProfessional)"\s*:/;
+  expect(requests.some(body=>body.includes('"mode":"fixture"'))).toBe(true);
+  for(const body of requests) expect(body).not.toMatch(forbidden);
+  expect(JSON.stringify(state)).not.toMatch(forbidden);
+  expect(logs.join("\n")).not.toMatch(forbidden);
+  const ssr=await (await page.request.get("/")).text();
+  expect(ssr).not.toMatch(/"(?:age|heightCm|weightKg)"\s*:\s*(?:30|170|70)/);
+  expect(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length}))).toEqual({local:0,session:0});
+
 });
 
 test("fixed breakfast external unknowns and confirmed pantry reach the saved plan", async ({page}) => {
