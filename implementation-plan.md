@@ -1,6 +1,6 @@
 # Meal Prep Agent — TDD 實作計畫
 
-更新：2026-09-29。T00–T10 的功能與本機驗證已完成；T11 實際部署大部分條件已驗，Workers Free CPU 方向待決；T12 真模型矩陣已齊，遠端 CI 與最終對帳進行中。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
+更新：2026-09-29。T00–T10 的功能與本機驗證已完成；T11 實際部署大部分條件已驗，Workers Free CPU 方向待決；T12 真模型矩陣、A/N/K 對帳與遠端 CI 已驗，完整 MVP 判定仍依賴 T11 的 K3 CPU gate。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
 
 ## 1. 前提與接續方式
 
@@ -40,7 +40,7 @@
 
 | 項目 | 依賴 | 交付結果 | 狀態 |
 |---|---|---|---|
-| T00 | 無 | 可執行測試環境、封裝、基本 CI | 已驗收：封裝／測試／build；公開 repo 遠端 CI a97d161 兩 job 成功，新候選仍待 CI |
+| T00 | 無 | 可執行測試環境、封裝、基本 CI | 已驗收：封裝／測試／build；公開 repo 遠端 CI `fb235ab` 的 Python／Web 兩 job 成功 |
 | T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 已驗收：目標 API／生成契約、Worker 保存 DTO／wire、日期／版本與原值邊界於 T04／T05／T07 補齊 |
 | T02 | T01 | 本機身體估算及確認邊界 | 已驗收：八列估算／表單／確認、metadata／鄰級比較，保存契約與全路徑隱私於 T07／T10 補齊 |
 | T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 已驗收（最小整合）：官方 HttpAgent／adapter、run token／取消、workerd SSE／中止、本地 D1 與一次 live；完整 K2/K3 留 T09/T11 |
@@ -52,7 +52,7 @@
 | T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 已驗收：正式 tools／Worker／聊天、取消與故障恢復、兩輪提案及一次 GLM live 完整工具鏈；品質矩陣留 T12 |
 | T10 | T09 | 多分頁、隱私與限額故障測試 | 已驗收（本地）：入口限流／body／run／token 預算、模式選擇／額度恢復、隱私／雙匿名context與mutation；真部署邊界留T11 |
 | T11 | T10；部署條件具備 | 實際環境與完整 K3 | 進行中：Oracle Web/API、D1故障／隔離、取消及整組回復已驗；Free CPU驗收方向待決定 |
-| T12 | T11 | live K4 與完整 MVP 驗收 | 進行中：A1／A3／A5／A10 各三次 live、正式入口 Web live 與本機完整回歸通過；A/N/K 對帳、帳戶 Neuron 實量與遠端 CI 待收尾 |
+| T12 | T11 | live K4 與完整 MVP 驗收 | 進行中：四案例各三次 live、正式入口 Web live、A/N/K 對帳、帳戶 Neuron 分析計量與遠端 CI 已驗；最終 MVP 依賴 T11 的 K3 CPU gate |
 
 每項可記「未開始／RED／GREEN／REFACTOR／已驗收／受阻」。只有必要案例與外部條件都有證據才標已驗收；以下內容是測試設計，尚不是執行結果。
 
@@ -181,7 +181,7 @@
 | K1 | T00、T01、T02、T04 | Python wheel 與封裝、`pnpm contracts:check`、`pnpm test:contracts` Python2＋TS2、`test_goals.py`／`estimate.test.ts`／`test_nutrition_totals.py` |
 | K2 | T03、T09 | `test_planning_agent.py` 正式 tools／官方 AG-UI、`test_agent_disconnect.py`／`test_sse_heartbeat.py`、`t12-live-*.json` 工具往返、正式入口 live 瀏覽器 |
 | K3 | T03、T07、T10、T11 | workerd40、正式 HTTPS 四例、真 D1 故障／取消／相容回復；Worker Free CPU 仍未有穩定 ≤10ms 證據，**待決** |
-| K4 | T12 | 四案例各三次 live、token／延遲／來源及受控繁中畫面、429 注入；Neuron 費率估算已記，Dashboard 帳戶實量**待核** |
+| K4 | T12 | 四案例各三次 live、token／延遲／來源及受控繁中畫面、429 注入；各案例費率估算與帳戶 GraphQL Analytics 3,486.63 Neurons／10,000 免費額度已記，分析計量不等於帳單數字 |
 
 ## 6. 執行證據格式
 
@@ -414,9 +414,11 @@ K4 使用固定 `@cf/zai-org/glm-4.7-flash`、合成食譜 `synthetic:recipes-v1
 | A5 7／8／9 | 第二天午餐單餐換 tofu-rice，其他餐完整不變 | 5.058／5.664／4.256 | 11604／11592／11616 | 232／234／158 | 72.27／72.27／69.64 |
 | A10 5／6／7 | 設備不足回 `equipment_unavailable`，無 ready | 3.769／5.626／31.359 | 8728／8804／8826 | 104／270／250 | 51.79／58.25／57.64 |
 
-12 筆納入案例的費率估算合計 796.21 Neurons；`uv run --env-file .env.cloudflare.local --project backend --frozen python scripts/live-acceptance.py <A1|A3|A5|A10> --trial <未使用編號>` 可重跑，原始事件與結果是 ignored `.artifacts/t12-live-<案例>-<trial>.events/.json`。A3-10 因 60 秒 timeout 且無 usage／proposal 排除，未充作通過。繁中品質驗的是訪客可見的受控繁中狀態、追問、失敗與 canonical 預覽；原始模型文字曾錯稱已保存與營養總數，只作忽略追蹤的診斷，從 live UI 隔離。模型額度 429／cooldown 由故障注入測試證實，沒有故意耗盡帳戶；真額度日用量須另以 Dashboard 核對。
+12 筆納入案例的費率估算合計 796.21 Neurons；`uv run --env-file .env.cloudflare.local --project backend --frozen python scripts/live-acceptance.py <A1|A3|A5|A10> --trial <未使用編號>` 可重跑，原始事件與結果是 ignored `.artifacts/t12-live-<案例>-<trial>.events/.json`。A3-10 因 60 秒 timeout 且無 usage／proposal 排除，未充作通過。繁中品質驗的是訪客可見的受控繁中狀態、追問、失敗與 canonical 預覽；原始模型文字曾錯稱已保存與營養總數，只作忽略追蹤的診斷，從 live UI 隔離。模型額度 429／cooldown 由故障注入測試證實，沒有故意耗盡帳戶；帳戶用量見下方 GraphQL Analytics 實測。
 
 - 本機最終候選：Python `168 passed`（`t12-python-final3.log`），Web Vitest `112 passed`（`t12-web-unit-final.log`）、workerd Playwright `40 passed`（`t12-workerd-final.log`）、Node Playwright `12 passed`（`t12-node-e2e.log`）；mypy 39 source、ruff check／format、TS typecheck、契約生成檢查及 wire Python2＋TS2、Next 與 Worker build 皆通過對應 `t12-*-final*.log`。最後 fixture 分流變更後 Python168及workerd40重跑；Node／Web／契約路徑未受變更。完整 diff `git diff --check` 通過。
 - 部署候選：只用 `git ls-files --cached --others --exclude-standard` 精確允許的 130 個 Docker build inputs 傳到既有專用 Oracle 目錄，未傳 env／AGENTS.local／artifacts。首輪 Web image 因 context 缺 `synthetic-evaluation.json` 而 TypeScript build 失敗；補 `.dockerignore` 與 Web Dockerfile 的 test-fixture allowlist 後重建成功，屬封裝錯誤，不冒充業務 RED。新 immutable tags API `t12-final1`（image sha256:1a52819c...）、Web `t12-final1`（sha256:936cd623...）；Compose API／Web／Tunnel healthy，無 host ports，快照 RAM 84.22／48.61／17.75 MiB。Worker 沿用已驗 `02a3066d-de34-44ca-90d2-a8bdeab89f3b`，D1 schema 不變；前一組相容映像保留可回復。
 - 正式 HTTPS 入口四個合成瀏覽器案例全部通過：D1 身份隔離／CAS、手動目標採用換菜重開、引導估算、兩輪 Agent（`t12-deployed-four.log`）。另外 `scripts/live-browser-acceptance.mjs` 明確選 live，在真 Worker／VPC／Oracle 上取得 HTTP200、受控九餐預覽與未採用狀態，兩次 7 秒（`t12-live-browser-{1,2}.json`）。首次腳本試圖用 Playwright `response.text()` 讀串流，在 Chromium 得 `Network.getResponseBody` 無資料；改以真瀏覽器已驗 UI、請求 mode、HTTP 與九餐卡片判定，未把無法讀到的每輪 usage 虛構為正式入口證據。後端 12 筆 live 案例另有真 AG-UI `run_usage`。
 - 遠端 CI run 36471787758 對 `5ef1b73` 的 Web job 成功；Python job 167 passed／1 failed，失敗在 SSE heartbeat 與上游 timeout 同時到達時，producer 已結束但錯誤仍在 queue，舊邏輯直接 return。新增穩定注入該競爭的 `test_heartbeat_timeout_does_not_hide_queued_source_error`，先 RED 再保留 queue 終止訊息使 GREEN；本機完整 Python 169 passed，ruff check／format、mypy 39 source 與原 deadline 案例連跑 100 次通過。修正後的遠端 CI 仍須重新驗收。
+- 修正 commit `fb235ab` 的 [遠端 CI run 36472443571](https://github.com/Will413028/meal-prep-agent/actions/runs/36472443571) 逐 job 核對 Python／Web 均 success；原失敗案例納入 Python 169 passed，Web job 含契約、112 Vitest、Node／workerd Playwright 與兩種 build。
+- 2026-09-28 UTC 透過 Cloudflare 官方 GraphQL Analytics `aiInferenceAdaptiveGroups` 查專案帳戶：固定 GLM-4.7-flash 116 次、input 505,163／output 19,457 tokens、`totalNeurons=3,486.6313`，ignored 原始摘要 `.artifacts/t12-account-neurons.json`。這是**整個帳戶所有專案**當日同模型用量，不能歸給本專案 12 筆案例；該 12 筆另以各 run usage 估算 796.21。依[官方免費額度](https://developers.cloudflare.com/workers-ai/platform/pricing/)為每日 10,000 Neurons，當下分析計量低於額度；[GraphQL 官方說明](https://developers.cloudflare.com/analytics/graphql-api/)明示分析資料不是計費依據，因此不宣稱已取得 Dashboard 帳單實值。

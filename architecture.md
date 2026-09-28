@@ -1,6 +1,6 @@
 # Meal Prep Agent — 技術選型與架構
 
-更新：2026-09-29。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。雙入口、餐單與正式 Agent、匿名 D1 保存均已實作；Oracle Web／API 與 Cloudflare 入口已部署。K1／K2 本機與 live 證據、K3 部署大部分條件及 K4 四案例矩陣見 [實作計畫](implementation-plan.md)；Workers Free CPU 與帳戶 Neuron 實量仍待最後驗收。
+更新：2026-09-29。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。雙入口、餐單與正式 Agent、匿名 D1 保存均已實作；Oracle Web／API 與 Cloudflare 入口已部署。K1／K2 本機與 live 證據、K3 部署大部分條件及 K4 四案例矩陣見 [實作計畫](implementation-plan.md)；帳戶 Neuron 分析計量及遠端 CI 已核，Workers Free CPU 仍待最後決定。
 
 [產品規格](product-spec.md) 定義 A1–A14；[營養政策](nutrition-policy.md) 定義數值、公式及 N1–N8。本文件是技術選型與模組責任的主要依據。
 

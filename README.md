@@ -4,7 +4,7 @@
 
 ## 目前狀態
 
-已確認 MVP 產品方向、只用免費模型額度，並允許使用 Cloudflare。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 比較選型、定義模組／資料流及整合驗證。已選定 Next.js＋FastAPI／PydanticAI；Oracle 原生 Web／API、Cloudflare 入口與 D1 已部署，完整 CPU／模型品質驗收仍在進行。T00–T10 的開發與本地驗收紀錄、T11 部署證據及 T12 真模型案例見 [實作計畫](implementation-plan.md)。
+已確認 MVP 產品方向、只用免費模型額度，並允許使用 Cloudflare。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 比較選型、定義模組／資料流及整合驗證。已選定 Next.js＋FastAPI／PydanticAI；Oracle 原生 Web／API、Cloudflare 入口與 D1 已部署，真模型矩陣及遠端 CI 已通過；Workers Free CPU gate 尚待決定。T00–T10 的開發與本地驗收紀錄、T11 部署證據及 T12 真模型案例見 [實作計畫](implementation-plan.md)。
 
 ## MVP 範圍
 
