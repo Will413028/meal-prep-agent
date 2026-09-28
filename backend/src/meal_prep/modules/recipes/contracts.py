@@ -41,7 +41,7 @@ class Recipe(Contract):
     portionIncrement: JsonDecimal = Field(gt=0)
     mealSlots: tuple[Literal["breakfast", "lunch", "dinner", "snack"], ...]
     ingredients: tuple[Ingredient, ...] = Field(min_length=1)
-    nutrients: dict[NutrientName, NutrientRecord]
+    nutrients: dict[NutrientName, NutrientRecord] = Field(min_length=4, max_length=4)
     equipment: tuple[str, ...]
     dietaryTags: tuple[str, ...]
     steps: tuple[RecipeStep, ...] = Field(min_length=1)

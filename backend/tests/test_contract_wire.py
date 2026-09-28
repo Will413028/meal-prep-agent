@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from test_planning_search import request
 
 from meal_prep.bootstrap.app import create_app
 
@@ -23,3 +24,13 @@ def test_export_real_http_goal_responses_for_typescript() -> None:
     artifact = Path(__file__).resolve().parents[2] / ".artifacts/wire-goals.json"
     artifact.parent.mkdir(parents=True, exist_ok=True)
     artifact.write_text(json.dumps([response.json() for response in responses]))
+
+
+def test_export_real_planning_http_for_typescript() -> None:
+    body = request().model_dump(mode="json")
+    with TestClient(create_app()) as client:
+        response = client.post("/api/v1/proposals/build", json=body)
+    assert response.status_code == 200
+    assert response.json()["status"] == "ready"
+    artifact = Path(__file__).resolve().parents[2] / ".artifacts/wire-planning.json"
+    artifact.write_text(json.dumps({"request": body, "response": response.json()}))

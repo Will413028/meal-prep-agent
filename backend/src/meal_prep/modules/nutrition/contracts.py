@@ -1,4 +1,5 @@
 from decimal import Decimal
+from math import isfinite
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -22,6 +23,9 @@ def decimal_number(value: object) -> Decimal:
     result = Decimal(str(value))
     if not result.is_finite():
         raise ValueError("must be finite")
+    wire = float(result)
+    if not isfinite(wire) or (result != 0 and wire == 0):
+        raise ValueError("number cannot be represented by the JSON client")
     return result
 
 
@@ -36,6 +40,13 @@ InputNumber = Annotated[JsonDecimal, Field(decimal_places=1)]
 
 class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("schemaVersion", mode="before", check_fields=False)
+    @classmethod
+    def strict_schema_version(cls, value: object) -> object:
+        if type(value) is not int:
+            raise ValueError("schemaVersion must be an integer")
+        return value
 
 
 class Range(Contract):
@@ -83,13 +94,6 @@ class GoalValues(Contract):
 
 class GoalRequest(GoalValues):
     schemaVersion: Literal[1]
-
-    @field_validator("schemaVersion", mode="before")
-    @classmethod
-    def version_is_integer(cls, value: object) -> object:
-        if type(value) is not int:
-            raise ValueError("schemaVersion must be an integer")
-        return value
 
 
 class GoalRanges(Contract):

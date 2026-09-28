@@ -4,12 +4,7 @@ import type { EstimateInput, EstimateResult } from "./estimate";
 export type GoalResult = components["schemas"]["GoalResult"];
 export type EstimateDraft = { input: EstimateInput; result: Extract<EstimateResult, { status: "ready" }> };
 export type GoalDraft = { validated: GoalResult; intent: EstimateInput["intent"]; estimate: EstimateDraft | null };
-export type ConfirmedGoal = GoalResult & {
-  intent: EstimateInput["intent"];
-  source: "manual" | "estimated" | "user_adjusted";
-  references: string[];
-  confirmedAt: string;
-};
+export type ConfirmedGoal = components["schemas"]["ConfirmedGoal-Output"];
 
 export const energyReference = "https://www.canada.ca/en/health-canada/services/food-nutrition/healthy-eating/dietary-reference-intakes/tables/equations-estimate-energy-requirement.html";
 export const proteinReferences = {

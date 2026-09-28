@@ -1,6 +1,6 @@
 # Meal Prep Agent — TDD 實作計畫
 
-更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 最小整合、T04 domain 已驗收。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
+更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 最小整合、T04 domain、T05 提案已驗收。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
 
 ## 1. 前提與接續方式
 
@@ -41,11 +41,11 @@
 | 項目 | 依賴 | 交付結果 | 狀態 |
 |---|---|---|---|
 | T00 | 無 | 可執行測試環境、封裝、基本 CI | 已驗收（本機）：封裝／測試／build；CI 定義已建立，遠端執行於 T12 核對 |
-| T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 部分 GREEN：目標 API／生成契約；Worker DTO／日期待補；餐單原值比較於 T04 已驗 |
+| T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 部分 GREEN：目標 API／生成契約；Worker DTO 待補；日期／版本於 T05、餐單原值比較於 T04 已驗 |
 | T02 | T01 | 本機身體估算及確認邊界 | 部分 GREEN：八列估算／表單／確認；本機 metadata／鄰級比較已補，保存契約與全路徑隱私 gate 待補 |
 | T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 已驗收（最小整合）：官方 HttpAgent／adapter、run token／取消、workerd SSE／中止、本地 D1 與一次 live；完整 K2/K3 留 T09/T11 |
 | T04 | T01、T03 可行性 | 食譜資料與營養計算 | 已驗收：受控合成資料、份量／來源、Decimal 小計／完整性與三種 mutation |
-| T05 | T04 | 三天提案、局部修改及硬限制 | 未開始 |
+| T05 | T04 | 三天提案、局部修改及硬限制 | 已驗收：有限搜尋／canonical API、scope／鎖定／來源、真 HTTP 跨語言契約 |
 | T06 | T05 | 購物、庫存與備餐衍生資料 | 未開始 |
 | T07 | T01、T05、T06 | D1／匿名身份、原子採用與清除 | 未開始 |
 | T08 | T02、T07 | 雙入口與手動操作完整切片 | 未開始 |
@@ -247,3 +247,16 @@
 - 獨立 correctness review 找出部分餐次個別 within_target 與先除後乘的件數誤差，兩項皆採修正。對照產品 §7 修正原錯誤 assertion，新反例 2 failed → GREEN（`.artifacts/t04-review-red.log`）；個別達標也需 full_day，件數改以原始 quantity*amount 對 basis*increment 整除，不先算1/3。複查無新增問題。
 - 最終 Python 66 passed（`uv run --project backend --frozen pytest backend/tests -q`，`.artifacts/t04-python-final.log`）；ruff check／format 與 mypy no-incremental 通過。`uv build --project backend --wheel --out-dir .artifacts/t04-dist` 後安裝至隔離 wheel-env，從 `/tmp` 以 `python -I` 載入 packaged catalog 並驗1.5份雞肉飯為1050 kcal（`.artifacts/t04-wheel*.log`）。Web／公開契約未改，未額外重跑不受影響的瀏覽器流程。
 - 配餐搜尋／scope／外食鎖定與 API 串接由 T05 接續；購物／設備排程由 T06 接續，沒有將純營養計算宣稱完整餐單已完成。
+
+
+### 2026-09-28 T05 三天提案與局部修改
+
+- Consumer 盤點：`rg -n -g '*.py' -g '*.ts' -g '*.tsx' -g '!schema.d.ts' -g '!*-validator.d.ts' 'build_proposal|validate_proposal|ConfirmedGoal|validateBuildResult|validateEvaluation|validateProposal' backend/src backend/tests apps/web/src apps/web/tests`；結果為 planning application／API／測試、生成 validator wrapper 與既有 GoalSetup／goal-state，詳 `.artifacts/t05-consumers.txt`。ConfirmedGoal 改由 OpenAPI 生成；Worker 保存 DTO 仍待 T07。
+- `uv run --project backend --frozen pytest backend/tests/test_planning.py -q`：evaluate 空介面 6 failed → GREEN；scope／份量鎖定空驗證 2 failed → GREEN，base 未被修改且 scope 外完整 snapshot 相等。最初測試直接指定 int 造成 `.is_finite` 錯誤不算 RED；修成 Decimal 後重新以空驗證確認 assertion RED。來源竄改案例屬既有 canonical 檢查的回歸保護。
+- `test_planning_search.py`：三天／預算／設備及受控替代 3 failed → GREEN；第二天限定換菜、固定外食與鎖定循環 2 failed → GREEN。beam 16、每餐最多 4 食譜、3 輪，另以最多 20,000 次展開限制請求；失敗只回搜尋範圍內未找到或具體衝突，不宣稱全域無解。
+- `test_planning_api.py`：evaluate／build／validate 真 HTTP 先 404 assertion 2 failed → GREEN。日期、UTC timestamp、嚴格版本／安全整數及 number/null 由 Python 公開契約生成 TS／Ajv standalone validators；HTTP 回應交生成 client 再驗 runtime schema。缺營養 key／缺版本反例先 1 failed，補輸出 required 與 nutrient key 數量後通過，未手改生成產物。
+- 邊界循環：重複 base／fixedMeal、bool 版本、數字 timestamp、三天日期溢位；已知 kcal 衝突不可因 protein 未知而隱藏；固定餐點和明確替換衝突；soft time 超過只警告、hard time 拒絕。各有實際 RED/GREEN，見 `.artifacts/t05-{boundary,known-target,fixed-conflict,soft-time}-red.log`。
+- 審查修正：design-review 1 項採「改」，搜尋與 evaluation 共用 `meal_nutrition`。correctness 4 項：3 改、1 駁回。數值超出 JSON client 可表示範圍、除法後溢位、revision 超過 2^53−1，4 failed → GREEN；解鎖外食的明確 replacement 原被忽略，1 failed → GREEN。刪餐禁止建議駁回：T06 明列刪餐重算，產品 §3 允許暫未安排；scope／lock 仍驗證，coverage／fullDay／withinTargets 已表達缺餐與未知，不宣稱全天達標。
+- Mutation：移除 scope／locked guard 均使測試紅，finally 還原，`.artifacts/t05-mutation-{scope,lock}.log`。與原始開發 RED 分開記錄。
+- 最終 Python `pytest backend/tests -q`：95 passed（`.artifacts/t05-python-final.log`）；Web 66 passed（`.artifacts/t05-web-final.log`）；契約 wire 為 2 個 Python producer＋2 個 TS consumer 測試。ruff、mypy、typecheck、contracts:check 通過；Next 與 vinext build 通過、workerd Playwright 10 passed（`.artifacts/t05-{next-build,worker-build,worker-e2e}.log`）。build／瀏覽器在最後純 Python 邊界修正前完成，修正後重跑 Python／契約／typecheck，未假稱重跑未受影響的瀏覽器。
+- 此階段交付 Python API 與可共用 use cases；購物／備餐由 T06、D1 採用由 T07、完整卡片流程由 T08、正式 tools 由 T09 接續。沒有將 Python canonical 驗證當成已保存或已核驗身份。
