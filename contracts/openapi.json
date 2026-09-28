@@ -36,6 +36,113 @@
         "title": "AdoptAction",
         "type": "object"
       },
+      "AgentForwardedProps": {
+        "additionalProperties": false,
+        "properties": {
+          "planning": {
+            "$ref": "#/components/schemas/PreviewRequest"
+          }
+        },
+        "required": [
+          "planning"
+        ],
+        "title": "AgentForwardedProps",
+        "type": "object"
+      },
+      "AgentMessage": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "content"
+        ],
+        "title": "AgentMessage",
+        "type": "object"
+      },
+      "AgentRunRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "context": {
+            "items": {},
+            "maxItems": 0,
+            "title": "Context",
+            "type": "array"
+          },
+          "forwardedProps": {
+            "$ref": "#/components/schemas/AgentForwardedProps"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/AgentMessage"
+            },
+            "maxItems": 12,
+            "minItems": 1,
+            "title": "Messages",
+            "type": "array"
+          },
+          "protocolVersion": {
+            "const": "1.0",
+            "title": "Protocolversion",
+            "type": "string"
+          },
+          "runId": {
+            "format": "uuid",
+            "title": "Runid",
+            "type": "string"
+          },
+          "state": {
+            "additionalProperties": true,
+            "maxProperties": 0,
+            "title": "State",
+            "type": "object"
+          },
+          "threadId": {
+            "format": "uuid",
+            "title": "Threadid",
+            "type": "string"
+          },
+          "tools": {
+            "items": {},
+            "maxItems": 0,
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "protocolVersion",
+          "threadId",
+          "runId",
+          "messages",
+          "state",
+          "tools",
+          "context",
+          "forwardedProps"
+        ],
+        "title": "AgentRunRequest",
+        "type": "object"
+      },
       "BuildProposalRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2623,6 +2730,59 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/agent": {
+      "post": {
+        "operationId": "run_agent_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Run"
+      }
+    },
+    "/api/agent": {
+      "post": {
+        "operationId": "agent_contract_api_agent_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Agent Contract",
+        "tags": [
+          "worker-only"
+        ]
+      }
+    },
     "/api/plan": {
       "get": {
         "operationId": "plan_read_contract_api_plan_get",

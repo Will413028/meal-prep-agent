@@ -1,5 +1,3 @@
-import { proxyPython } from "../../../server/python-proxy";
-
-export function POST(request: Request) {
-  return proxyPython(request, "/agent");
+export function POST() {
+  return Response.json({error:"worker_required"},{status:503});
 }

@@ -348,3 +348,22 @@ test("old nutrition snapshots remain in D1 after rejection and explicit new iden
     expect((await readSession(db,token,now))?.currentJson).toBe(original);
   }
 });
+
+test("Agent proxy replaces caller context with the owned D1 base and strips cookies", async () => {
+  const {headers,payload,evaluation} = await initializeHttp();
+  const validator: ProposalValidator = async input => ({...input.context,evaluation,diff:[],shoppingDiff:[],prepDiff:[],violations:[]});
+  await sessionHttp(new Request("https://meal.test/api/plan/actions",{method:"POST",headers,body:JSON.stringify(payload)}),db,()=>now,validator);
+  const context = {planId:payload.planId,sessionGeneration:payload.sessionGeneration,baseRevision:1,runId:crypto.randomUUID(),scope:evaluation.candidate.meals.map(({day,slot}) => ({day,slot}))};
+  const planning = {schemaVersion:1,context,goal:evaluation.candidate.goal,constraints:evaluation.candidate.constraints};
+  const body = {protocolVersion:"1.0",threadId:payload.planId,runId:context.runId,messages:[{id:"m",role:"user",content:"請幫我换菜"}],state:{},tools:[],context:[],forwardedProps:{planning}};
+  let forwarded: unknown;
+  const run = async (input: unknown) => {forwarded=input;return new Response('data: {"type":"RUN_FINISHED"}\n\n',{headers:{"content-type":"text/event-stream"}});};
+  const send = (value: unknown) => sessionHttp(new Request("https://meal.test/api/agent",{method:"POST",headers,body:JSON.stringify(value)}),db,()=>now,undefined,undefined,run);
+  const result = await send(body);
+  expect(result.status).toBe(200);
+  expect(forwarded).toMatchObject({forwardedProps:{planning:{base:evaluation,context}}});
+  expect(JSON.stringify(forwarded)).not.toContain("__Host-meal_session");
+  expect((await send({...body,forwardedProps:{planning:{...planning,base:evaluation}}})).status).toBe(400);
+  expect((await send({...body,runId:crypto.randomUUID()})).status).toBe(400);
+  expect((await readSession(db,headers.cookie.split("=")[1],now))?.revision).toBe(1);
+});

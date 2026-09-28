@@ -11,10 +11,17 @@ import { PlanView, type Meal, type Recipe } from "./PlanView";
 import { PlanningForm, planDates, type Preferences } from "./PlanningForm";
 import { planningFailure } from "./messages";
 import { ProposalComparison } from "./ProposalComparison";
+import { PlanningChat } from "../chat/PlanningChat";
 import { GoalSummary } from "./GoalSummary";
 
 type Proposal = components["schemas"]["CanonicalProposal"];
 type Constraints = PreviewRequest["constraints"];
+const operationMessages = {
+  preview:"正在產生三天提案…", replacement:"正在尋找替換餐點…", save:"正在保存變更…",
+  clear:"正在清除規劃…", prepareChat:"正在準備對話…", newPlan:"正在開始新規劃…",
+  agent:"AI 正在處理…", reload:"正在重新讀取餐單…",
+} as const;
+type Operation = keyof typeof operationMessages;
 
 function scopeFor(constraints: Constraints) {
   return planDates(constraints.startDate).flatMap(day => constraints.slots.map(slot => ({day,slot})));
@@ -26,10 +33,12 @@ export function PlannerWorkspace() {
   const [session,setSession] = useState<SessionState | null>(null);
   const [goal,setGoal] = useState<ConfirmedGoal | null>(null);
   const [recipes,setRecipes] = useState<Recipe[]>([]);
+  const [chatPreferences,setChatPreferences] = useState<Preferences | null>(null);
   const [proposal,setProposal] = useState<Proposal | null>(null);
   const [ready,setReady] = useState(false);
-  const [progress,setProgress] = useState<string | null>(null);
-  const busy = progress !== null;
+  const [operation,setOperation] = useState<Operation | null>(null);
+  const busy = operation !== null;
+  const progress = operation === null ? null : operationMessages[operation];
   const [readOnly,setReadOnly] = useState(false);
   const [error,setError] = useState("");
   const [unsupported,setUnsupported] = useState(false);
@@ -40,7 +49,7 @@ export function PlannerWorkspace() {
     generation.current++;
     setSession(state);setGoal(state?.current?.candidate.goal ?? null);
     setEditingGoal(!state?.current);setFormKey(value => value+1);
-    setProposal(null);setReadOnly(false);setUnsupported(false);
+    setProposal(null);setChatPreferences(null);setReadOnly(false);setUnsupported(false);
   }
 
   function readFailure(cause: unknown) {
@@ -64,15 +73,17 @@ export function PlannerWorkspace() {
   },[repository]);
 
   async function reload() {
+    setOperation("reload");
     try {restore(await repository.read());setError("");}
     catch (cause) {readFailure(cause);}
+    finally {setOperation(null);}
   }
 
   async function preview(preferences: Preferences, replacement?: {meal: Meal; recipeId: string}) {
     if (!goal) return;
     const constraints = preferences.constraints;
     const id = ++generation.current;
-    setProgress(replacement ? "正在尋找替換餐點…" : "正在產生三天提案…");setError("");setProposal(null);
+    setOperation(replacement ? "replacement" : "preview");setError("");setProposal(null);
     try {
       const state = session ?? await repository.initialize();
       if (id !== generation.current) return;
@@ -87,12 +98,12 @@ export function PlannerWorkspace() {
       if (result.status === "ready" && result.proposal) setProposal(result.proposal);
       else setError(`${planningFailure(result.reason)} 目前計畫未變更。`);
     } catch {if (id === generation.current) setError("提案未完成，請確認服務可用或重新讀取目前版本後重試；原計畫未變更。");}
-    finally {if (id === generation.current) setProgress(null);}
+    finally {if (id === generation.current) setOperation(null);}
   }
 
   async function save(action: PlanActionRequest["action"]) {
     if (!session) return;
-    setProgress("正在保存變更…");setError("");
+    setOperation("save");setError("");
     try {
       const saved = await repository.apply({schemaVersion:1,planId:session.planId,sessionGeneration:session.sessionGeneration,baseRevision:session.revision,operationId:crypto.randomUUID(),action},session.csrfToken);
       if (action.type === "adopt" || action.type === "undo") restore(saved);
@@ -101,27 +112,34 @@ export function PlannerWorkspace() {
       setProposal(null);
       try {restore(await repository.read());setError("操作未確認成功，已重新讀取目前版本。請檢查餐單後再操作。");}
       catch (cause) {readFailure(cause);}
-    } finally {setProgress(null);}
+    } finally {setOperation(null);}
   }
 
   async function clear() {
     if (!session) return;
-    generation.current++;setProposal(null);setProgress("正在清除規劃…");setError("");
+    generation.current++;setProposal(null);setOperation("clear");setError("");
     try {
       await repository.clear(session.csrfToken);
-      setSession(null);setGoal(null);setEditingGoal(true);setFormKey(value => value+1);setReadOnly(false);
+      setSession(null);setGoal(null);setChatPreferences(null);setEditingGoal(true);setFormKey(value => value+1);setReadOnly(false);
     } catch {setReadOnly(true);setError("清除尚未確認完成，請重試；不會將失敗顯示為已清除。");}
-    finally {setProgress(null);}
+    finally {setOperation(null);}
+  }
+
+  async function prepareChat(preferences: Preferences) {
+    setOperation("prepareChat");setError("");setProposal(null);
+    try {const state = session ?? await repository.initialize();setSession(state);setChatPreferences(preferences);}
+    catch {setError("目前無法準備對話，請重試。");}
+    finally {setOperation(null);}
   }
 
   async function startNew() {
-    setProgress("正在開始新規劃…");setError("");
+    setOperation("newPlan");setError("");
     try {
       const state = await repository.initialize();
       generation.current++;setSession(state);setGoal(null);setProposal(null);
       setEditingGoal(true);setFormKey(value => value+1);setReadOnly(false);setUnsupported(false);
     } catch {setError("未能開始新規劃，請重試。");}
-    finally {setProgress(null);}
+    finally {setOperation(null);}
   }
 
   return <div>
@@ -132,8 +150,9 @@ export function PlannerWorkspace() {
     {readOnly && <p>目前為唯讀狀態。</p>}
     {unsupported && <button disabled={busy} onClick={() => void startNew()}>開始新規劃</button>}
     <button disabled={!ready || busy} onClick={() => void reload()}>重新讀取餐單</button>
-    {goal && <PlanningForm key={`${session?.current ? session.planId : "new"}:${formKey}`} initial={session?.current?.candidate ?? null} recipes={recipes} disabled={busy || !ready || readOnly} onBuild={preferences => void preview(preferences)} onInvalidate={() => setProposal(null)} />}
+    {goal && <PlanningForm key={`${session?.current ? session.planId : "new"}:${formKey}`} initial={session?.current?.candidate ?? null} recipes={recipes} disabled={busy || !ready || readOnly} onBuild={preferences => void preview(preferences)} onChat={preferences => void prepareChat(preferences)} onInvalidate={() => {setProposal(null);setChatPreferences(null);}} />}
     {busy && <p role="status">{progress}</p>}
+    <div className={session && goal && (chatPreferences || session.current) ? "workspace-columns has-chat" : "workspace-columns"}><div>
     {proposal && <section aria-label="餐單提案預覽"><h2>餐單提案預覽 · 尚未採用</h2>
       <p>採用前不會變更目前計畫。</p>
       <GoalSummary goal={proposal.evaluation.candidate.goal} label="採用後的目標" />
@@ -153,6 +172,26 @@ export function PlannerWorkspace() {
           void save({type:"portion",day:meal.day,slot:meal.slot,quantity:Number(value)});
         }} />
     </section>}
+    </div>
+    {session && goal && (chatPreferences || session.current) && <PlanningChat key={session.sessionGeneration}
+      disabled={readOnly || (busy && operation !== "agent")}
+      prepare={runId => {
+        const preferences = chatPreferences ?? {constraints:session.current!.candidate.constraints,pantry:session.current!.candidate.pantry,fixedMeals:[],replacements:{},searchBudget:20000};
+        return {csrf:session.csrfToken,planning:{schemaVersion:1,goal,...preferences,context:{planId:session.planId,sessionGeneration:session.sessionGeneration,baseRevision:session.revision,runId,scope:Array.from(new Map([...scopeFor(preferences.constraints),...(session.current?.candidate.meals ?? []),...preferences.fixedMeals].map(({day,slot}) => [`${day}:${slot}`,{day,slot}])).values())}}};
+      }}
+      onBusy={value => setOperation(value ? "agent" : null)} onInvalidate={() => setProposal(null)}
+      onProposal={async (candidate,current) => {
+        let latest;
+        try {latest = await repository.read();}
+        catch (cause) {if (current()) readFailure(cause);throw cause;}
+        if (!current()) return;
+        if (!latest || latest.planId !== candidate.planId || latest.sessionGeneration !== candidate.sessionGeneration || latest.revision !== candidate.baseRevision) {
+          restore(latest);setError("雲端餐單已有變更，已重新讀取；本次提案作廢，請依最新餐單重試。");
+          throw new Error("stale proposal");
+        }
+        setSession(latest);setProposal(candidate);
+      }} />}
+    </div>
     {session && <button disabled={busy} onClick={() => void clear()}>清除本次規劃</button>}
   </div>;
 }

@@ -36,6 +36,7 @@ const validators = {
   PlanActionRequest: schema.paths["/api/plan/actions"].post.requestBody.content["application/json"].schema,
   SessionInit: schema.paths["/api/session"].post.requestBody.content["application/json"].schema,
   PreviewRequest: schema.paths["/api/plan/preview"].post.requestBody.content["application/json"].schema,
+  AgentRunRequest: schema.paths["/api/agent"].post.requestBody.content["application/json"].schema,
   RecipeCatalog: schema.paths["/api/v1/recipes"].get.responses["200"].content["application/json"].schema,
 };
 for (const [name, modelSchema] of Object.entries(validators)) {

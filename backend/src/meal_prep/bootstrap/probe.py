@@ -34,7 +34,7 @@ def create_probe_app(
             await asyncio.sleep(tool_delay)
         return {"synthetic": True, "adoptable": False}
 
-    @app.post("/agent")
+    @app.post("/diagnostics/agent")
     async def run(request: Request) -> Response:
         adapter = await AGUIAdapter.from_request(request, agent=agent)
 
@@ -68,29 +68,32 @@ def create_probe_app(
 
 def create_synthetic_probe_app() -> FastAPI:
     """Explicit local test server; never a live model fallback."""
+    from pydantic_ai.messages import ToolReturnPart
+    from pydantic_ai.models.function import DeltaToolCall, FunctionModel
     from pydantic_ai.models.test import TestModel
 
-    return create_probe_app(TestModel(call_tools=["transport_probe"]), tool_delay=1)
+    async def planning_stream(messages: Any, _info: Any) -> AsyncIterator[Any]:
+        parts = messages[-1].parts
+        returned = {
+            part.tool_name for part in parts if isinstance(part, ToolReturnPart)
+        }
+        if "build_proposal" in returned:
+            yield "合成模型測試：提案已計算完成，尚未採用。"
+        else:
+            tool = "build_proposal" if "find_recipes" in returned else "find_recipes"
+            yield {
+                0: DeltaToolCall(
+                    name=tool, json_args="{}", tool_call_id=f"synthetic-{tool}"
+                )
+            }
+
+    app = create_probe_app(TestModel(call_tools=["transport_probe"]), tool_delay=1)
+    app.state.planning_model = FunctionModel(stream_function=planning_stream)
+    return app
 
 
 def create_live_probe_app() -> FastAPI:
     """Explicit opt-in: configured credentials, fixed Cloudflare model, no fallback."""
-    import os
-    import re
+    from .live import cloudflare_model
 
-    from pydantic_ai.models.openai import OpenAIChatModel
-    from pydantic_ai.providers.openai import OpenAIProvider
-
-    account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
-    token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
-    if not re.fullmatch(r"[a-f0-9]{32}", account) or not token:
-        raise RuntimeError(
-            "Configure CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN for the opt-in live probe."
-        )
-    provider = OpenAIProvider(
-        base_url=f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1",
-        api_key=token,
-    )
-    return create_probe_app(
-        OpenAIChatModel("@cf/zai-org/glm-4.7-flash", provider=provider)
-    )
+    return create_probe_app(cloudflare_model())

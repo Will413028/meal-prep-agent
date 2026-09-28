@@ -2,7 +2,7 @@ import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  testIgnore: process.env.MEAL_TEST_WORKER === "1" ? [] : ["**/persistence.spec.ts","**/planner.spec.ts"],
+  testIgnore: process.env.MEAL_TEST_WORKER === "1" ? [] : ["**/persistence.spec.ts","**/planner.spec.ts","**/chat-faults.spec.ts"],
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   reporter: [["list"], ["junit", { outputFile: "../../.artifacts/playwright.xml" }]],

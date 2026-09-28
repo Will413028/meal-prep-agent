@@ -11,7 +11,7 @@ def test_real_adapter_roundtrip_calls_tool_and_emits_explicit_outcome() -> None:
     model = TestModel(call_tools=["transport_probe"])
     with TestClient(create_probe_app(model)) as client:
         response = client.post(
-            "/agent",
+            "/diagnostics/agent",
             json={
                 "threadId": "synthetic-thread",
                 "runId": "synthetic-run",
@@ -59,7 +59,7 @@ def test_cancelled_probe_never_emits_ready_even_if_adapter_finishes() -> None:
         create_probe_app(TestModel(call_tools=["transport_probe"]), token)
     ) as client:
         response = client.post(
-            "/agent",
+            "/diagnostics/agent",
             json={
                 "threadId": "synthetic-thread",
                 "runId": "cancelled-run",
@@ -88,7 +88,7 @@ def test_model_text_without_tool_result_does_not_emit_ready() -> None:
         )
     ) as client:
         response = client.post(
-            "/agent",
+            "/diagnostics/agent",
             json={
                 "threadId": "synthetic-thread",
                 "runId": "no-tool-run",

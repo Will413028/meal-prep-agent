@@ -19,7 +19,7 @@ test("browser abort closes a real incremental stream through the fixed proxy", a
   await page.goto("/diagnostics/transport");
   const evidence = await page.evaluate(async () => {
     const controller = new AbortController();
-    const response = await fetch("/api/agent", { method: "POST", signal: controller.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ threadId: "disconnect", runId: "browser-disconnect", state: {}, tools: [], context: [], forwardedProps: {}, messages: [{ id: "m", role: "user", content: "probe" }] }) });
+    const response = await fetch("/api/diagnostics/agent", { method: "POST", signal: controller.signal, headers: { "content-type": "application/json" }, body: JSON.stringify({ threadId: "disconnect", runId: "browser-disconnect", state: {}, tools: [], context: [], forwardedProps: {}, messages: [{ id: "m", role: "user", content: "probe" }] }) });
     const reader = response.body!.getReader();
     const first = await reader.read();
     const initial = new TextDecoder().decode(first.value);
@@ -42,7 +42,7 @@ test("explicit synthetic outcome and successful finish are shown by the real con
 });
 
 test("bare finish never becomes a usable outcome", async ({ page }) => {
-  await page.route("**/api/agent", async route => {
+  await page.route("**/api/diagnostics/agent", async route => {
     const { runId, threadId } = route.request().postDataJSON();
     await route.fulfill({ contentType: "text/event-stream", body: [{ type: "RUN_STARTED", runId, threadId }, { type: "RUN_FINISHED", runId, threadId }].map(event => `data: ${JSON.stringify(event)}\n\n`).join("") });
   });
@@ -58,7 +58,7 @@ test("cancelled browser run stays cancelled after a late response and can retry"
   const barrier = new Promise<void>(resolve => { release = resolve; });
   const requested = new Promise<void>(resolve => { observed = resolve; });
   let first = true;
-  await page.route("**/api/agent", async route => {
+  await page.route("**/api/diagnostics/agent", async route => {
     const { runId, threadId } = route.request().postDataJSON();
     if (first) { first = false; observed(); await barrier; }
     await route.fulfill({ contentType: "text/event-stream", body: [

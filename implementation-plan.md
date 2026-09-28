@@ -49,7 +49,7 @@
 | T06 | T05 | 購物、庫存與備餐衍生資料 | 已驗收：庫存單次扣抵、勾選／衍生diff、設備序列與分裝、HTTP完整快照 |
 | T07 | T01、T05、T06 | D1／匿名身份、原子採用與清除 | 本地驗收完成；部署案例由 T11 驗 |
 | T08 | T02、T07 | 雙入口與手動操作完整切片 | 本地驗收完成：兩入口、營養／比較、採用換菜恢復及故障唯讀；設計與正確性審查已修正 |
-| T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 未開始 |
+| T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 已驗收：正式 tools／Worker／聊天、取消與故障恢復、兩輪提案及一次 GLM live 完整工具鏈；品質矩陣留 T12 |
 | T10 | T09 | 多分頁、隱私與限額故障測試 | 未開始 |
 | T11 | T10；部署條件具備 | 實際環境與完整 K3 | 未開始 |
 | T12 | T11 | live K4 與完整 MVP 驗收 | 未開始 |
@@ -310,3 +310,18 @@
 - 獨立 design-review 檢查身份／CAS、preview 邊界、衍生營養、契約／舊快照及 UI 狀態：1 項發現，提1（已獲決定）→ 改1；複查無剩餘 finding。獨立 correctness review 3 項全部修正：中文名稱轉 catalog foodId，未知／歧義拒絕；adopt／undo／reload／失敗回讀同步表單；回讀同時同步 goal。`t08-review-red.log` 3 RED，`t08-goal-recovery-red.log` 預期1800卻送2000的獨立 RED，修正後回歸 GREEN。第二次靜態複查確認3項解決。
 - 桌機1360×1000／手機390×844已目視檢查 `.artifacts/t08-desktop.png`、`t08-mobile.png`，無橫向溢出，按鍵焦點可見；Playwright 同時驗寬度及鍵盤焦點。所有畫面資料清楚標示合成或使用者來源。
 - 最終驗證：`uv run --project backend --frozen pytest backend/tests -q` 115 passed（`t08-python-verified.log`）；`pnpm test:web` 96 passed（`t08-web-verified.log`）；`MEAL_TEST_WORKER=1 pnpm test:e2e` 21 passed（`t08-reviewed-e2e.log`），新增復原庫存斷言另跑 `--grep 'fixed breakfast'` 1 passed（`t08-undo-pantry.log`）。`pnpm contracts:check`、`pnpm test:contracts` Python2＋TS2、ruff check／format、mypy、typecheck、Next build、vinext build、本地 D1 probe 均通過。原始 RED、後續 mutation 與環境失敗分開記錄；本階段不宣稱正式 Agent／部署／完整 MVP gates 通過。
+
+
+### T09 執行紀錄（2026-09-28）
+
+- 沿用盤點：從目前約束重新設計仍選官方 PydanticAI／AGUIAdapter、每請求獨立 dependencies、共用 `build_proposal`／`recipe_allowed`，不沿用 probe 的 synthetic/adoptable=false 結果契約；正式結果包含 canonical proposal。UUID／revision／D1 base 沿用 T07 身份／CAS 契約；採用仍為獨立 action。沒有全域 proposal/context；app state 只持 server-configured model。
+- `test_planning_agent.py` 正式 `/agent` 原404的3個 RED（`t09-agent-red.log`）→ find_recipes／build_proposal 真框架往返、明確 proposal_ready、純文字不可採用、未設定模型503無synthetic fallback GREEN（`t09-agent-green.log`）。正式 `/agent` 由 create_app 掛載；診斷 probe 已移至 `/diagnostics/agent`，合成測試 factory 同時配置正式工具的 FunctionModel。
+- 正式工具依指定scope／replacements呼叫同一use case；on_complete 核對本輪最後build call與成功結果，後續無效tool參數不發布先前候選。not_found 發 proposal_unavailable；真TCP斷線測試同時涵蓋probe與正式route。已驗2輪request不繼承上一輪未採用候選、部分餐次局部換菜精確保留其他餐、全天目標下無可行豆腐替代保持not_found。第一次局部成功測試誤選無可行全天fixture，修正成正／負兩案；不改domain限制、不冒充產品bug RED。
+- 公共 Worker AgentRunRequest 生成契約；`sessionHttp` 對Agent入口驗owner／CSRF／run/thread/context IDs、拒browser base並注入D1 current。`t09-worker-red.log` 原404的1 RED → Web97 GREEN（`t09-worker-green.log`）。後續已接 Worker fetch dispatcher、固定 Python `/agent` sender 與正式聊天 UI；匿名 Cookie 不轉送 Python。
+- 有界文字歷史：最多12則user/assistant、每則2000字、合計8000字，最後必須user；不收system、tool history、client tool/state/context。`t09-history-red.log` 原422 RED→正式adapter接受歷史。TestModel見既有ModelResponse就不呼叫tools（已查安裝版test.py），故此案改FunctionModel明確發tool call，不能把TestModel排程誤判產品錯誤。
+- 真 HttpAgent envelope 額外帶 `protocolVersion: "1.0"`；原 schema 拒絕造成瀏覽器 400，官方 SDK 捕捉測試 1 RED → Web 98 GREEN（`t09-sdk-envelope-red.log`／`t09-sdk-green.log`），由 Python 生成新契約，未手改 validators。
+- 聊天先設定已確認條件再執行；兩輪提案只有明確採用那輪寫入 D1。正式 adapter 事件經 transport 注入截斷、外來 run、錯序、取消後晚到、最終雲端 read 失敗，均不能採用半成品，重試可恢復。聊天初始缺入口 RED → workerd GREEN；最終 cloud read 503 原未進唯讀 RED → 修正 readFailure GREEN。
+- 獨立 design-review 覆蓋官方 transport、request dependencies、最後 tool call 綁定、ID／revision／CAS、取消、歷史及固定上游；1 項發現採「改」：以 typed Operation 取代 UI 文案控制忙碌狀態，複審無剩餘發現。正確性審查 2 項採「改」：取消先解除 active run，防止舊 finally 清掉新操作；跨頁 revision 改變先 restore 最新快照再重試。兩案首次行為 RED 後 GREEN（`t09-review-red.log`／`t09-review-green2.log`）。同餐單重試採用屬 no-op，依 T07 不增加 revision；測試改驗預覽關閉／版本與鎖定保留，未放寬產品規則。
+- 沿用機制重新評估：官方 HttpAgent／adapter、request-scoped deps、UUID／D1 CAS 仍適合目前無帳號且不自建框架的約束；最多 12 則／每則 2000 字／合計 8000 字與 4 model requests／8 tools 保持有界。Worker／client 60 秒上限已存在；Python 整輪 deadline 與全入口 body limit 按既定 T10 補齊，未將單次 provider timeout 當整輪保護。
+- GLM live：前三次未通過，第三次明確因推理耗盡 2048 token。依官方 [GLM template](https://huggingface.co/zai-org/GLM-4.7-Flash/blob/main/chat_template.jinja#L85) 在固定 provider 設 `chat_template_kwargs.enable_thinking=false`，保留 max_tokens 2048。第四次正式 `/agent` 成功：find_recipes → build_proposal → proposal_ready → RUN_FINISHED，22.544 秒，input 58,892／output 2,030 tokens、3 requests／2 tool calls（`t09-live-run4.log`）。輸入均合成，未採用或部署；回覆有錯字及每日／三日標題混淆，T12 品質矩陣須改善並重驗，不能從一次 transport 成功宣稱品質完成。
+- 階段回歸命令：`uv run --project backend --frozen pytest backend/tests -q` 126 passed；`pnpm test:web` 98 passed；`MEAL_TEST_WORKER=1 pnpm test:e2e` 30 passed；`pnpm test:e2e` Node 12 passed。ruff check／format、mypy 35 source files、typecheck、contracts:check、test:contracts（Python 2／TS 2）、Next build 與 vinext build 通過。證據為 `.artifacts/t09-*-final.log` 與 `t09-review-fixed-build.log`；1440px 桌面並排與 390px 手機聊天截圖已人工檢視。T10–T12、遠端 CI／部署尚未完成。

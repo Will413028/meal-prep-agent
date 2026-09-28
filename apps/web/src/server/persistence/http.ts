@@ -1,7 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { paths } from "../../shared/api/schema";
 import { validateBuildResult, validateEvaluation, validateProposal } from "../../shared/api/validate";
-import { validateAction, validateSession, validateSessionInit, validatePreviewRequest, type SessionState } from "../../shared/api/persistence";
+import { validateAgentRun, type AgentRunRequest, validateAction, validateSession, validateSessionInit, validatePreviewRequest, type SessionState } from "../../shared/api/persistence";
 import { commitSession, createSession, deleteSession, hash, readSession, type SessionRow } from "./sessions";
 import { parseActionJson } from "./json";
 
@@ -14,6 +14,8 @@ export type ProposalOutput = paths["/api/v1/proposals/validate"]["post"]["respon
 export type ProposalValidator = (input: ProposalInput, signal: AbortSignal) => Promise<ProposalOutput>;
 export type BuildInput = paths["/api/v1/proposals/build"]["post"]["requestBody"]["content"]["application/json"];
 export type BuildOutput = paths["/api/v1/proposals/build"]["post"]["responses"][200]["content"]["application/json"];
+export type AgentInput = Omit<AgentRunRequest,"forwardedProps"> & {forwardedProps:{planning:BuildInput}};
+export type AgentRunner = (input: AgentInput, signal: AbortSignal) => Promise<Response>;
 export type ProposalBuilder = (input: BuildInput, signal: AbortSignal) => Promise<BuildOutput>;
 
 function normalized(value: unknown): unknown {
@@ -66,9 +68,32 @@ export function sessionCookie(token: string, expiresAt: number, now: number): st
   return `__Host-meal_session=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${Math.max(0, Math.floor((expiresAt-now)/1000))}; Expires=${new Date(expiresAt).toUTCString()}`;
 }
 
-export async function sessionHttp(request: Request, db: D1Database, clock: () => number = Date.now, validator?: ProposalValidator, builder?: ProposalBuilder): Promise<Response> {
+export async function sessionHttp(request: Request, db: D1Database, clock: () => number = Date.now, validator?: ProposalValidator, builder?: ProposalBuilder, agent?: AgentRunner): Promise<Response> {
   try {
     const url = new URL(request.url);
+    if (request.method === "POST" && url.pathname === "/api/agent") {
+      writeOrigin(request);
+      const token = cookieToken(request);
+      if (!token) throw new PersistenceError(404,"not_found");
+      await checkCsrf(request,token);
+      let body;
+      try { body = validateAgentRun(parseActionJson(await request.text())); }
+      catch { throw new PersistenceError(400,"invalid_request"); }
+      if (body.messages.at(-1)?.role !== "user" || body.messages.reduce((total,message) => total + [...message.content].length,0) > 8000) throw new PersistenceError(400,"invalid_request");
+      const {schemaVersion: _version,...planning} = body.forwardedProps.planning;
+      const context = planning.context;
+      if (body.runId !== context.runId || body.threadId !== context.planId) throw new PersistenceError(400,"invalid_request");
+      const row = await readSession(db,token,clock(),context.planId);
+      if (!row) throw new PersistenceError(404,"not_found");
+      if (row.revision !== context.baseRevision || row.sessionGeneration !== context.sessionGeneration) throw new PersistenceError(409,"revision_conflict");
+      const state = await stateFromRow(row,token);
+      if (!agent) throw new PersistenceError(503,"model_unavailable");
+      let upstream;
+      try { upstream = await agent({...body,forwardedProps:{planning:{...planning,base:state.current}}},request.signal); }
+      catch { throw new PersistenceError(503,"model_unavailable"); }
+      const headers = new Headers({"content-type":upstream.headers.get("content-type") ?? "application/json","cache-control":"no-store",vary:"Cookie"});
+      return new Response(upstream.body,{status:upstream.status,headers});
+    }
     if (request.method === "POST" && url.pathname === "/api/plan/preview") {
       writeOrigin(request);
       const token = cookieToken(request);

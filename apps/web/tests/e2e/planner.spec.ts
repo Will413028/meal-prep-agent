@@ -228,3 +228,32 @@ test("Chinese food exclusions resolve to catalog identifiers before preview", as
   await expect(page.getByRole("alert").filter({hasText:"無法確認食材"})).toBeVisible();
   expect(excluded).toBeUndefined();
 });
+
+test("Agent produces two separate previews and only the chosen round is adopted", async ({page}) => {
+  await page.goto("/");
+  await page.getByRole("button",{name:"載入合成目標"}).click();
+  await page.getByRole("button",{name:"確認使用此目標"}).click();
+  await page.getByLabel("開始日期").fill("2026-10-01");
+  await page.getByRole("button",{name:"設定條件並開啟對話"}).click();
+  const chat = page.getByRole("region",{name:"備餐對話"});
+  await expect(chat).toBeVisible();
+  await chat.getByLabel("想如何安排餐點？").fill("請安排三天餐單");
+  await chat.getByRole("button",{name:"傳送"}).click();
+  const preview = page.getByRole("region",{name:"餐單提案預覽"});
+  await expect(preview).toBeVisible();
+  const first = await page.evaluate(async () => (await fetch("/api/plan")).json());
+  expect(first.current).toBeNull();
+  await chat.getByLabel("想如何安排餐點？").fill("請重新提出三天餐單，先不要採用");
+  await chat.getByRole("button",{name:"傳送"}).click();
+  await expect(chat.getByRole("status")).toContainText("提案已完成");
+  await expect(preview).toBeVisible();
+  await page.setViewportSize({width:1440,height:1000});
+  await preview.scrollIntoViewIfNeeded();
+  await page.screenshot({path:"../../.artifacts/t09-chat-desktop.png"});
+  await page.setViewportSize({width:390,height:844});
+  await chat.scrollIntoViewIfNeeded();
+  await expect(page.locator("body")).toHaveJSProperty("scrollWidth",390);
+  await page.screenshot({path:"../../.artifacts/t09-chat-mobile.png"});
+  await page.getByRole("button",{name:"採用這份提案"}).click();
+  await expect(page.getByRole("region",{name:"已採用餐單"})).toContainText("已保存 · 版本 1");
+});

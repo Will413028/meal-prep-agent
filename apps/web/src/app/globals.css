@@ -11,8 +11,8 @@ section[aria-label="餐單提案預覽"] { border: 2px solid #ad7823; }
 article { padding: 1rem; background: #f6f8f3; border-radius: .75rem; margin: .75rem 0; }
 fieldset { border: 1px solid #dce5d7; border-radius: .65rem; padding: 1rem; margin: .75rem 0; min-width: 0; }
 label { display: inline-flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin: .4rem .8rem .4rem 0; }
-input, select, button { font: inherit; }
-input, select { max-width: 100%; padding: .6rem; border: 1px solid #aab9ad; border-radius: .35rem; background: white; }
+input, select, textarea, button { font: inherit; }
+input, select, textarea { max-width: 100%; padding: .6rem; border: 1px solid #aab9ad; border-radius: .35rem; background: white; }
 input[type="checkbox"] { width: 1.15rem; height: 1.15rem; accent-color: #275e45; }
 button { padding: .65rem 1rem; border: 1px solid #275e45; border-radius: .5rem; color: #fff; background: #275e45; cursor: pointer; margin: .35rem .5rem .35rem 0; }
 button:disabled { opacity: .5; cursor: not-allowed; }
@@ -25,3 +25,13 @@ summary { cursor: pointer; padding: .65rem 0; font-weight: 600; }
 .days-grid > section { min-width: 0; }
 @media (min-width: 960px) { .days-grid { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media (max-width: 640px) { main { padding: 1rem .7rem 3rem; } section[aria-label] { padding: .8rem; } label { display: flex; } input:not([type="checkbox"]), select { min-width: 0; width: 100%; } }
+
+.workspace-columns > * { min-width: 0; }
+section[aria-label="備餐對話"] { border: 1px solid #dce5d7; border-radius: 1rem; padding: 1rem; background: #fff; overflow-wrap: anywhere; }
+section[aria-label="備餐對話"] label, textarea { width: 100%; }
+textarea { min-height: 7rem; resize: vertical; }
+@media (min-width: 1200px) {
+  main { max-width: 1440px; }
+  .workspace-columns.has-chat { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 1.25rem; align-items: start; }
+  .workspace-columns.has-chat > section { position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow: auto; }
+}

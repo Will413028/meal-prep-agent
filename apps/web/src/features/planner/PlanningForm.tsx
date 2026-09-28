@@ -26,8 +26,9 @@ function amount(value: FormDataEntryValue | null, nullable = false): number | nu
   return Number(text);
 }
 
-export function PlanningForm({initial,recipes,disabled,onBuild,onInvalidate}: {
+export function PlanningForm({initial,recipes,disabled,onBuild,onChat,onInvalidate}: {
   initial: Evaluation["candidate"] | null; recipes: Recipe[]; disabled: boolean;
+  onChat: (preferences: Preferences) => void;
   onBuild: (preferences: Preferences) => void; onInvalidate: () => void;
 }) {
   const [date,setDate] = useState(initial?.constraints.startDate ?? "");
@@ -61,7 +62,9 @@ export function PlanningForm({initial,recipes,disabled,onBuild,onInvalidate}: {
         if (quantity <= 0 || !/^\d+(?:\.\d{1,3})?$/.test(String(data.get("breakfastQuantity")))) throw new Error("早餐份量須大於零，最多三位小數。");
         for (const day of dates) fixedMeals.push({day,slot:"breakfast",kind:"recipe",recipeId:breakfast,recipeSnapshot:null,external:null,quantity,locked:true});
       }
-      onBuild({constraints:{startDate:date,slots,equipment,excludedFoods:foodIds(data.get("exclude")),preferredFoods:foodIds(data.get("prefer")),dietaryTags:names(data.get("diet")),timeLimitMinutes:amount(data.get("minutes"),true),timeIsHard:data.get("hardTime") === "on"},fixedMeals,pantry,replacements:{},searchBudget:20000});
+      const submit = (event.nativeEvent as SubmitEvent).submitter;
+      const action = submit instanceof HTMLButtonElement && submit.value === "chat" ? onChat : onBuild;
+      action({constraints:{startDate:date,slots,equipment,excludedFoods:foodIds(data.get("exclude")),preferredFoods:foodIds(data.get("prefer")),dietaryTags:names(data.get("diet")),timeLimitMinutes:amount(data.get("minutes"),true),timeIsHard:data.get("hardTime") === "on"},fixedMeals,pantry,replacements:{},searchBudget:20000});
     } catch (failure) {setError(failure instanceof Error ? failure.message : "請檢查條件。");}
   }
 
@@ -136,6 +139,7 @@ export function PlanningForm({initial,recipes,disabled,onBuild,onInvalidate}: {
       </fieldset>
       {error && <p role="alert">{error}</p>}
       <button disabled={!slots.length || !recipes.length}>產生三天提案</button>
+      <button value="chat" disabled={!slots.length || !recipes.length}>設定條件並開啟對話</button>
     </fieldset></form></details>
   </section>;
 }

@@ -8,13 +8,17 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx2 as httpx
+import pytest
 import uvicorn
 from pydantic_ai.models.function import FunctionModel
+from test_planning_agent import payload
 
+from meal_prep.bootstrap.app import create_app
 from meal_prep.bootstrap.probe import create_probe_app
 
 
-def test_tcp_disconnect_cleans_up_running_provider_stream() -> None:
+@pytest.mark.parametrize("formal", [False, True])
+def test_tcp_disconnect_cleans_up_running_provider_stream(formal: bool) -> None:
     released = threading.Event()
 
     async def model_stream(messages: Any, info: Any) -> AsyncIterator[str]:
@@ -25,7 +29,10 @@ def test_tcp_disconnect_cleans_up_running_provider_stream() -> None:
         finally:
             released.set()
 
-    app = create_probe_app(FunctionModel(stream_function=model_stream))
+    model = FunctionModel(stream_function=model_stream)
+    app = create_app() if formal else create_probe_app(model)
+    if formal:
+        app.state.planning_model = model
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
@@ -42,8 +49,10 @@ def test_tcp_disconnect_cleans_up_running_provider_stream() -> None:
         with httpx.Client(timeout=5) as client:
             with client.stream(
                 "POST",
-                f"http://127.0.0.1:{port}/agent",
-                json={
+                f"http://127.0.0.1:{port}/{'agent' if formal else 'diagnostics/agent'}",
+                json=payload()
+                if formal
+                else {
                     "threadId": "disconnect-thread",
                     "runId": "disconnect-run",
                     "messages": [{"id": "m", "role": "user", "content": "probe"}],

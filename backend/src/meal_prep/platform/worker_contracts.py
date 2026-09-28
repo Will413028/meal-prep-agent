@@ -3,7 +3,7 @@
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from pydantic import AwareDatetime, Field
 
 from meal_prep.modules.nutrition.contracts import Contract, JsonDecimal
@@ -81,6 +81,27 @@ class PreviewRequest(BuildPreferences):
     context: ProposalContext
 
 
+class AgentMessage(Contract):
+    id: str = Field(min_length=1, max_length=120)
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class AgentForwardedProps(Contract):
+    planning: PreviewRequest
+
+
+class AgentRunRequest(Contract):
+    protocolVersion: Literal["1.0"]
+    threadId: UUID
+    runId: UUID
+    messages: tuple[AgentMessage, ...] = Field(min_length=1, max_length=12)
+    state: dict[str, object] = Field(max_length=0)
+    tools: tuple[object, ...] = Field(max_length=0)
+    context: tuple[object, ...] = Field(max_length=0)
+    forwardedProps: AgentForwardedProps
+
+
 class ClearedSession(Contract):
     cleared: Literal[True]
 
@@ -110,4 +131,13 @@ def preview_contract(request: PreviewRequest) -> BuildProposalResult:
 
 @router.delete("/api/session", response_model=ClearedSession)
 def session_clear_contract() -> ClearedSession:
+    raise NotImplementedError("contract-only; served by Worker")
+
+
+@router.post(
+    "/api/agent",
+    response_class=Response,
+    responses={200: {"content": {"text/event-stream": {}}}},
+)
+def agent_contract(request: AgentRunRequest) -> Response:
     raise NotImplementedError("contract-only; served by Worker")

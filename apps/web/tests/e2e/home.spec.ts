@@ -105,7 +105,7 @@ test("manual goal reaches the real Python validator through the Web route", asyn
 test("browser receives official AG-UI SSE through the fixed proxy", async ({ page }) => {
   await page.goto("/");
   const result = await page.evaluate(async () => {
-    const response = await fetch("/api/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+    const response = await fetch("/api/diagnostics/agent", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
       threadId: "synthetic-thread", runId: "browser-run", state: {}, tools: [], context: [], forwardedProps: {},
       messages: [{ id: "message-1", role: "user", content: "Run synthetic transport probe." }],
     }) });

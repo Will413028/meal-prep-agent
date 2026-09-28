@@ -15,7 +15,7 @@ export function TransportProbe() {
 
   async function start() {
     active.current?.agent.abortRun();
-    const run = { state: startRun(crypto.randomUUID()), agent: new HttpAgent({ url: "/api/agent", threadId: crypto.randomUUID(), debug: false, initialMessages: [{ id: crypto.randomUUID(), role: "user", content: "Run synthetic transport probe." }] }) };
+    const run = { state: startRun(crypto.randomUUID()), agent: new HttpAgent({ url: "/api/diagnostics/agent", threadId: crypto.randomUUID(), debug: false, initialMessages: [{ id: crypto.randomUUID(), role: "user", content: "Run synthetic transport probe." }] }) };
     active.current = run;
     setState(run.state);
     const timeout = setTimeout(() => { run.agent.abortRun(); }, 60_000);

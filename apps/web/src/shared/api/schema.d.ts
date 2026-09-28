@@ -1,5 +1,39 @@
 // Generated from contracts/openapi.json. Do not edit.
 export interface paths {
+    "/agent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run */
+        post: operations["run_agent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Agent Contract */
+        post: operations["agent_contract_api_agent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plan": {
         parameters: {
             query?: never;
@@ -190,6 +224,51 @@ export interface components {
              * @enum {string}
              */
             type: "adopt";
+        };
+        /** AgentForwardedProps */
+        AgentForwardedProps: {
+            planning: components["schemas"]["PreviewRequest"];
+        };
+        /** AgentMessage */
+        AgentMessage: {
+            /** Content */
+            content: string;
+            /** Id */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+        };
+        /** AgentRunRequest */
+        AgentRunRequest: {
+            /** Context */
+            context: unknown[];
+            forwardedProps: components["schemas"]["AgentForwardedProps"];
+            /** Messages */
+            messages: components["schemas"]["AgentMessage"][];
+            /**
+             * Protocolversion
+             * @constant
+             */
+            protocolVersion: "1.0";
+            /**
+             * Runid
+             * Format: uuid
+             */
+            runId: string;
+            /** State */
+            state: {
+                [key: string]: unknown;
+            };
+            /**
+             * Threadid
+             * Format: uuid
+             */
+            threadId: string;
+            /** Tools */
+            tools: unknown[];
         };
         /** BuildProposalRequest */
         BuildProposalRequest: {
@@ -1190,6 +1269,59 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    run_agent_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    agent_contract_api_agent_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     plan_read_contract_api_plan_get: {
         parameters: {
             query?: never;
