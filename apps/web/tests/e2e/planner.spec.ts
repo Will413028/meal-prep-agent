@@ -54,14 +54,14 @@ test("manual goal creates a preview, adopts a plan, replaces one meal and reopen
   await expect(adopted).toContainText("已保存 · 版本 6");
   await page.route("**/api/plan/preview",route => route.fulfill({status:503,json:{error:"calculation_unavailable"}}));
   await adopted.getByRole("button",{name:"換菜"}).nth(1).click();
-  await expect(page.getByRole("alert")).toContainText("提案未完成");
+  await expect(page.getByRole("alert").filter({hasText:"提案未完成"})).toBeVisible();
   await shopping.click();
   await expect(adopted).toContainText("已保存 · 版本 7");
   await page.route("**/api/session",route => route.fulfill({status:503,json:{error:"storage_unavailable"}}));
   await page.route("**/api/plan",route => route.fulfill({status:503,json:{error:"storage_unavailable"}}));
   await page.getByRole("button",{name:"清除本次規劃"}).click();
   await expect(adopted).toContainText("唯讀快照 · 版本 7");
-  await expect(page.getByRole("alert")).toContainText("清除尚未確認");
+  await expect(page.getByRole("alert").filter({hasText:"清除尚未確認"})).toBeVisible();
   await page.unroute("**/api/session");await page.unroute("**/api/plan");
   await page.getByRole("button",{name:"清除本次規劃"}).click();
   await expect(adopted).toHaveCount(0);
@@ -185,7 +185,7 @@ test("unsupported saved snapshots require an explicit new plan", async ({page}) 
   let creates = 0;
   page.on("request", request => {if (request.url().endsWith("/api/session") && request.method() === "POST") creates++;});
   await page.goto("/");
-  await expect(page.getByRole("alert")).toContainText("舊餐單格式");
+  await expect(page.getByRole("alert").filter({hasText:"舊餐單格式"})).toBeVisible();
   expect(creates).toBe(0);
   await page.getByRole("button",{name:"開始新規劃"}).click();
   await expect(page.getByText("目前為唯讀狀態。")).toHaveCount(0);
@@ -220,7 +220,7 @@ for (const recovery of ["reload","conflict"] as const) {
     let goal: unknown;
     await page.route("**/api/plan/preview",route => {goal = route.request().postDataJSON().goal;return route.fulfill({status:503,json:{error:"calculation_unavailable"}});});
     await page.getByRole("button",{name:"產生三天提案"}).click();
-    await expect(page.getByRole("alert")).toContainText("提案未完成");
+    await expect(page.getByRole("alert").filter({hasText:"提案未完成"})).toBeVisible();
     expect(goal).toMatchObject({requested:{kcal:1800}});
     await expect(page.getByLabel("早餐",{exact:true})).not.toBeChecked();
     await expect(page.getByLabel("鍋具",{exact:true})).toBeChecked();
@@ -237,7 +237,7 @@ test("Chinese food exclusions resolve to catalog identifiers before preview", as
   let excluded: unknown;
   await page.route("**/api/plan/preview",route => {excluded = route.request().postDataJSON().constraints.excludedFoods;return route.fulfill({status:503,json:{error:"calculation_unavailable"}});});
   await page.getByRole("button",{name:"產生三天提案"}).click();
-  await expect(page.getByRole("alert")).toContainText("提案未完成");
+  await expect(page.getByRole("alert").filter({hasText:"提案未完成"})).toBeVisible();
   expect(excluded).toEqual(["oats"]);
   excluded = undefined;
   await page.getByLabel("排除食材（逗號分隔）").fill("尚未收錄的食材");

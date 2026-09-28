@@ -7,9 +7,14 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"], ["junit", { outputFile: "../../.artifacts/playwright.xml" }]],
   use: { baseURL: "http://127.0.0.1:14317" },
-  webServer: [{
+  webServer: [...(process.env.MEAL_TEST_WORKER === "1" ? [{
+    command:"pnpm exec next build && cp -R .next/static .next/standalone/apps/web/.next/ && HOSTNAME=127.0.0.1 PORT=14319 node .next/standalone/apps/web/server.js",
+    timeout:120_000,
+    env:{NEXT_TELEMETRY_DISABLED:"1"},
+    url:"http://127.0.0.1:14319",reuseExistingServer:false,
+  }] : []), {
     command: process.env.MEAL_TEST_WORKER === "1"
-      ? "pnpm exec wrangler d1 migrations apply DB --local --config dist/server/wrangler.json && pnpm exec wrangler dev --config dist/server/wrangler.json --ip 127.0.0.1 --port 14317 --var MEAL_API_ORIGIN:http://127.0.0.1:14318"
+      ? "pnpm exec wrangler d1 migrations apply DB --local --config wrangler.jsonc && pnpm exec wrangler dev --config wrangler.jsonc --ip 127.0.0.1 --port 14317 --var MEAL_API_ORIGIN:http://127.0.0.1:14318 --var MEAL_WEB_ORIGIN:http://127.0.0.1:14319"
       : "pnpm exec next dev --hostname 127.0.0.1 --port 14317",
     env: { MEAL_API_ORIGIN: "http://127.0.0.1:14318", NEXT_TELEMETRY_DISABLED: "1" },
     url: "http://127.0.0.1:14317",

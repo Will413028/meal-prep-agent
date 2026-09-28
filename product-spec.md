@@ -83,7 +83,7 @@
 - **備餐與採買：** 共用食材合併、庫存扣抵、料理順序及分裝對應，外食另列在餐次中。
 - **展示入口：** 可載入合成人物與食材資料，讓訪客走完任一目標入口；也能清除本次規劃重新開始。
 
-營養與來源狀態貼近數字顯示。一般使用流程不呈現模型名稱、tool 名稱或 event payload。
+營養與來源狀態貼近數字顯示。模式選擇顯示是否使用真模型；餐單卡片不呈現 tool 名稱或 event payload。Agent 的自然語言用於理解要求與呼叫受控工具，完成狀態由已驗提案或失敗原因給出；未驗模型文字不作營養或保存事實。
 
 ## 6. 最小資料契約
 
@@ -147,7 +147,7 @@
 | A13 雲端保存 | 同瀏覽器 Cookie 有效且服務可用時，關頁後恢復已採用計畫與一次復原；不同匿名身份不能讀寫他人計畫；不恢復聊天或問卷，D1 故障不冒稱保存成功 |
 | A14 多分頁與清除 | 同版本的兩次提交只有一次生效；另一頁過期提案被擋；清除或到期後，尚在執行的舊回覆不能恢復已刪計畫 |
 
-驗證分為可重跑的資料／計算測試，以及真實模型的多輪互動驗收。前者通過不能替代後者；本次只定義案例，尚未執行應用測試。
+驗證分為可重跑的資料／計算測試，以及真實模型的多輪互動驗收。前者通過不能替代後者；各案例的執行證據與尚待項目記於 [實作計畫](implementation-plan.md)。
 
 ## 10. 設計選擇與開發前驗證
 
@@ -158,35 +158,35 @@
 | 起始目標估算 | Mifflin–St Jeor 需另選活動係數；DRI 2023 有完整成人活動分級公式；動態模型需要長期追蹤 | 採 DRI 2023 EER 起始估算，減脂 −10%／增肌 +5% 為產品提案預設，另行確認；公式、蛋白質規則與獨立核算見 [營養政策](nutrition-policy.md) |
 | 數值與適用政策 | 自由填寫彈性高；版本化的適用域與驗證可讓兩入口行為一致 | `nutrition-v1` 已列公式／單位、支援範圍、容許差、缺值及 N1–N8 驗收；開放真實輸入前須完成實作驗證 |
 | 計畫保存 | 分頁記憶體最簡單但無關頁恢復；D1＋匿名 Cookie 免登入但需雲端可用；登入帳號支援跨裝置但增加管理 | 已確認 D1＋匿名識別 Cookie，保存已採用計畫與前一版、30 天未修改失效；不使用 IndexedDB。見第 10.2 節 |
-| 免費模型 | 本機模型免 API 費但需要常駐硬體；雲端免費額度適合公開展示但有用量限制；付費 API 可擴充但不符合本次預算 | 已確認只用免費模型額度。優先評估 Workers AI；模型及串接方式依第 10.1 節驗證後定案 |
-| UI 與部署 | 全 TypeScript 可統一語言；Next.js＋Python API 增加跨語言契約，但能集中 Python 業務規則並沿用參考專案結構 | 已選 Next.js＋FastAPI／PydanticAI＋AG-UI，單一 repo、Modular Monolith；Workers 提供 Web／proxy，Python 另部署。詳細責任與取捨見 [技術架構](architecture.md) |
+| 免費模型 | 本機模型免 API 費但需要常駐硬體；雲端免費額度適合公開展示但有用量限制；付費 API 可擴充但不符合本次預算 | 固定 Workers AI `@cf/zai-org/glm-4.7-flash`，只用免費額度；正式工具與 AG-UI 已驗，日用量仍受帳戶共用額度約束 |
+| UI 與部署 | 全 TypeScript 可統一語言；Next.js＋Python API 增加跨語言契約，但能集中 Python 業務規則並沿用參考專案結構 | 已選 Next.js＋FastAPI／PydanticAI＋AG-UI，單一 repo、Modular Monolith；Workers 提供公開入口／D1／proxy，Next.js 與 Python 分別部署於 Oracle 專用容器。詳細責任與取捨見 [技術架構](architecture.md) |
 
 Mifflin–St Jeor 的 [原研究](https://pubmed.ncbi.nlm.nih.gov/2305711/) 保留作方法比較；v1 使用的公式與來源集中在營養政策，不維護兩套可互相漂移的係數表。
 
-### 10.1 免費模型與 Cloudflare 候選架構
+### 10.1 免費模型與 Cloudflare 部署方案
 
-2026-09-28 已確認採用參考專案的 Web／Python 技術與模組結構；尚未安裝、呼叫模型或部署。詳細選型、公開契約與模組邊界集中於 [技術架構](architecture.md)，此處保留產品限制。
+2026-09-28 已確認採用參考專案的 Web／Python 技術與模組結構；2026-09-29 已同意原生 Next.js 與 Python 部署 Oracle，T11 驗收進行中。詳細選型、公開契約與模組邊界集中於 [技術架構](architecture.md)，此處保留產品限制。
 
 | 元件 | 選型與責任 |
 |---|---|
-| Web | Next.js＋TypeScript；Cloudflare Workers，優先驗證 vinext，必要時再比較 OpenNext |
+| Web | Next.js＋TypeScript standalone；Oracle 專用容器，經 Cloudflare Worker／私有 VPC 提供公開入口 |
 | API／Agent | 獨立 Python 主機執行 FastAPI＋PydanticAI；官方 AGUIAdapter 傳送互動事件，Workers 負責匿名身份／D1 保存，並代理固定 Python 上游 |
-| 模型 | Workers AI `@cf/zai-org/glm-4.7-flash` 為免費候選，透過 OpenAI-compatible endpoint 驗證工具、串流及結構化結果 |
+| 模型 | 固定 Workers AI `@cf/zai-org/glm-4.7-flash`，透過 OpenAI-compatible endpoint；正式工具、串流與 canonical 結果已在 T12 live 案例驗證 |
 | 計算與資料 | Python 集中餐單／份量／購物計算；身體問卷在瀏覽器估算，後端接收已確認目標。API 與工具共用 use cases |
 
-依據 [Cloudflare Next.js 指引](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)、[PydanticAI AG-UI 整合](https://pydantic.dev/docs/ai/integrations/ui/ag-ui/)、[模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。官方介面支援不代表本產品已通過品質或部署驗收；Python 主機的費用與資源須另行確認。
+依據 [Cloudflare Next.js 指引](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)、[PydanticAI AG-UI 整合](https://pydantic.dev/docs/ai/integrations/ui/ag-ui/)、[模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。實測結果、剩餘 CPU／用量限制見 [實作計畫](implementation-plan.md)，不以官方介面支援代替本產品驗收。
 
 免費額度與失敗行為：
 
 - [Workers AI 定價](https://developers.cloudflare.com/workers-ai/platform/pricing/) 目前提供每日 10,000 Neurons 免費額度，00:00 UTC 重置（台灣 08:00）；不是 10,000 次對話，也不先承諾每日可服務人數。
-- 優先以 Workers Free 的平台額度上限避免超額計費。正式接入前核對實際帳戶方案、共用用量及所選模型的免費可用性；Workers Paid 超額會計費，不以應用限流就宣稱已有帳戶層的零費用保證。
+- 以 Workers Free 的平台額度上限避免超額計費；核對實際帳戶方案、共用用量及所選模型的免費可用性。Workers Paid 超額會計費，不以應用限流就宣稱已有帳戶層的零費用保證。
 - 定義每次執行的輸入／輸出 token、工具迴圈與重試上限，並對公開入口限流；數值以代表案例的實測消耗定案。到上限或供應商回報額度不足即停止，既有計畫仍可查看；需要 AI 的新提案待額度恢復，不自動改用付費服務。
 - fixture 展示與 live 模型模式明確區分。模型不可用時，可由訪客另行選擇合成案例展示，不悄悄以預錄結果冒充成功。
 
 先以最小技術驗證確認整合可行性，再隨功能完成下列完整條件，結果記入 [技術架構](architecture.md) 第 9 節 K1–K4 並在此連結；不另建立待辦主表：
 
 1. Python 封裝、生成 API 契約與兩端數值邊界通過 K1；PydanticAI／Workers AI 工具往返及 AG-UI 串流、取消與錯誤通過 K2。
-2. Next.js 在 workerd／實際 Workers 驗證 Web、SSE proxy 及資源；Python 主機另驗證容量及入口隔離；D1 保存、匿名身份與服務中斷恢復通過 K3。
+2. Oracle Next.js 經 workerd／實際 Worker 入口驗證 hydration，Worker 驗 SSE proxy 及 CPU；Oracle Web／Python 各驗容量及私有入口隔離；D1 保存、匿名身份與服務中斷恢復通過 K3。
 3. 合成資料走 A1、A3、A5、A10，各至少三次 live 驗證繁體中文、工具參數與來源，量測 token／Neuron 消耗及模擬耗盡，通過 K4。
 
 若任一條件不符，回到對應 runtime、provider 或部署選型比較，不自行升級付費。Temporal、PostgreSQL、帳號及跨裝置保存不隨本次技術參考一起納入。
@@ -207,7 +207,7 @@ Mifflin–St Jeor 的 [原研究](https://pubmed.ncbi.nlm.nih.gov/2305711/) 保�
 
 Agent 每次只接受必要的已確認目標、餐單／條件／待確認提案快照、當次訊息及有長度上限的本分頁對話上下文；不將原始身體表單混入上下文。服務端重新驗證資料與工具參數；PydanticAI run context 限該次 FastAPI 請求，不以服務全域記憶體保存跨使用者對話。應用 log 只記技術狀態與用量，不記訊息或身體欄位。自由聊天會送往模型，介面需與「身體表單只在本機計算」分別說明。
 
-A13／A14 的驗證包含關頁恢復、匿名身份隔離、D1 寫入失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；目前只有契約，尚未跑瀏覽器測試。
+A13／A14 的驗證包含關頁恢復、匿名身份隔離、D1 寫入失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；本地及部署證據見 implementation-plan.md T07／T11，完整 K3 的 CPU 驗收尚未收尾。
 
 ## 11. 建議實作順序
 

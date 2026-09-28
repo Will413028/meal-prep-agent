@@ -1,0 +1,11 @@
+// Generated. Do not edit.
+export function goal(value: unknown): boolean;
+export function Evaluation(value: unknown): boolean;
+export function CanonicalProposal(value: unknown): boolean;
+export function BuildProposalResult(value: unknown): boolean;
+export function SessionState(value: unknown): boolean;
+export function PlanActionRequest(value: unknown): boolean;
+export function SessionInit(value: unknown): boolean;
+export function PreviewRequest(value: unknown): boolean;
+export function AgentRunRequest(value: unknown): boolean;
+export function RecipeCatalog(value: unknown): boolean;

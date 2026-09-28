@@ -20,15 +20,11 @@ async function standalone(ajv, validator) {
 const input = new URL("../../../contracts/openapi.json", import.meta.url);
 const content = "// Generated from contracts/openapi.json. Do not edit.\n" + astToString(await openapiTS(input));
 const schema = JSON.parse(await readFile(input, "utf8"));
-const ajv = new Ajv2020({ strict: false, coerceTypes: false, allErrors: true, code: { source: true, esm: true } });
+const ajv = new Ajv2020({ strict: false, coerceTypes: false, allErrors: false, inlineRefs: false, code: { source: true, esm: true } });
 addFormats(ajv);
-const validate = ajv.compile({ $ref: "#/components/schemas/GoalResult", components: schema.components });
-const outputs = {
-  "schema.d.ts": content,
-  "goal-validator.js": await standalone(ajv, validate),
-  "goal-validator.d.ts": "// Generated. Do not edit.\nexport default function validate(value: unknown): boolean;\n",
-};
+const outputs = {"schema.d.ts": content};
 const validators = {
+  goal: {$ref:"#/components/schemas/GoalResult"},
   Evaluation: schema.paths["/api/v1/plans/evaluate"].post.responses["200"].content["application/json"].schema,
   CanonicalProposal: schema.paths["/api/v1/proposals/validate"].post.responses["200"].content["application/json"].schema,
   BuildProposalResult: schema.paths["/api/v1/proposals/build"].post.responses["200"].content["application/json"].schema,
@@ -39,9 +35,14 @@ const validators = {
   AgentRunRequest: schema.paths["/api/agent"].post.requestBody.content["application/json"].schema,
   RecipeCatalog: schema.paths["/api/v1/recipes"].get.responses["200"].content["application/json"].schema,
 };
-for (const [name, modelSchema] of Object.entries(validators)) {
-  const validator = ajv.compile({ ...modelSchema, components: schema.components });
-  outputs[`${name}-validator.js`] = await standalone(ajv, validator);
+// Compile one schema graph so shared contracts are emitted once across all roots.
+// The wrappers preserve existing imports; no runtime compiler or coercion is added.
+ajv.addSchema({$id:"meal-contract",components:schema.components,definitions:validators});
+const exports = Object.fromEntries(Object.keys(validators).map(name=>[name,`meal-contract#/definitions/${name}`]));
+outputs["validators.js"] = await standalone(ajv,exports);
+outputs["validators.d.ts"] = "// Generated. Do not edit.\n" + Object.keys(validators).map(name=>`export function ${name}(value: unknown): boolean;\n`).join("");
+for (const name of Object.keys(validators)) {
+  outputs[`${name}-validator.js`] = `// Generated from contracts/openapi.json. Do not edit.\nexport {${name} as default} from "./validators.js";\n`;
   outputs[`${name}-validator.d.ts`] = "// Generated. Do not edit.\nexport default function validate(value: unknown): boolean;\n";
 }
 for (const [filename, generated] of Object.entries(outputs)) {

@@ -1,12 +1,11 @@
 import { boundedBody, RequestTooLarge } from "./request-limits";
 
-type PythonRoute = "/api/v1/goals/validate" | "/diagnostics/agent" | "/api/v1/recipes" | "/api/v1/runtime";
+export type PythonRoute = "/api/v1/goals/validate" | "/diagnostics/agent" | "/api/v1/recipes" | "/api/v1/runtime";
 
-export async function proxyPython(request: Request, path: PythonRoute) {
-  const origin = process.env.MEAL_API_ORIGIN;
+export async function proxyPython(request: Request, path: PythonRoute, origin: string | undefined = process.env.MEAL_API_ORIGIN, send: typeof fetch = (...args) => fetch(...args)) {
   if (!origin) return Response.json({ error: "api_unavailable" }, { status: 503 });
   try {
-    const upstream = await fetch(new URL(path, origin), {
+    const upstream = await send(new URL(path, origin), {
       method: (path === "/api/v1/recipes" || path === "/api/v1/runtime") ? "GET" : "POST",
       headers: { "content-type": "application/json", accept: path === "/diagnostics/agent" ? "text/event-stream" : "application/json" },
       body: (path === "/api/v1/recipes" || path === "/api/v1/runtime") ? undefined : await boundedBody(request),

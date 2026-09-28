@@ -1,9 +1,10 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "meal-prep-agent",
+  "name": "meal-prep-local",
   "compatibility_date": "2026-09-28",
   "compatibility_flags": [
-    "nodejs_compat"
+    "nodejs_compat",
+    "enable_request_signal"
   ],
   "main": "src/worker.ts",
   "d1_databases": [
@@ -18,11 +19,6 @@
     "crons": [
       "17 3 * * *"
     ]
-  },
-  "assets": {
-    "directory": "dist/client",
-    "not_found_handling": "none",
-    "binding": "ASSETS"
   },
   "ratelimits": [
     {
@@ -49,5 +45,59 @@
         "period": 60
       }
     }
-  ]
+  ],
+  "env": {
+    "production": {
+      "name": "meal-prep-agent",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "meal-prep-production",
+          "database_id": "eff8893a-6168-4d19-b64f-23aa1e378ec4",
+          "migrations_dir": "../../deploy/migrations"
+        }
+      ],
+      "vpc_services": [
+        {
+          "binding": "MEAL_API",
+          "service_id": "01a0e8a5-8ce5-7940-8290-cf6b3fa8909f"
+        },
+        {
+          "binding": "MEAL_WEB",
+          "service_id": "01a0e8c4-bb33-7180-929f-1a8b6ab6361c"
+        }
+      ],
+      "ratelimits": [
+        {
+          "name": "API_RATE_LIMITER",
+          "namespace_id": "1431701",
+          "simple": {
+            "limit": 300,
+            "period": 60
+          }
+        },
+        {
+          "name": "SESSION_RATE_LIMITER",
+          "namespace_id": "1431702",
+          "simple": {
+            "limit": 60,
+            "period": 60
+          }
+        },
+        {
+          "name": "AI_RATE_LIMITER",
+          "namespace_id": "1431703",
+          "simple": {
+            "limit": 6,
+            "period": 60
+          }
+        }
+      ],
+      "triggers": {
+        "crons": [
+          "17 3 * * *"
+        ]
+      }
+    }
+  }
 }

@@ -2,13 +2,12 @@ import { beforeEach, expect, test, vi } from "vitest";
 import type { D1Database } from "@cloudflare/workers-types";
 
 const handlers = vi.hoisted(() => ({app:vi.fn(),session:vi.fn()}));
-vi.mock("vinext/server/fetch-handler",()=>({default:{fetch:handlers.app}}));
 vi.mock("./persistence/http",async importOriginal=>({...await importOriginal<typeof import("./persistence/http")>(),sessionHttp:handlers.session}));
 import worker from "../worker";
 
 beforeEach(()=>{handlers.app.mockReset().mockResolvedValue(new Response("web"));handlers.session.mockReset().mockResolvedValue(new Response("session"));});
 function environment() {
-  return {DB:{} as D1Database,API_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})},SESSION_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})},AI_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})}};
+  return {MEAL_WEB:{fetch:handlers.app},DB:{} as D1Database,API_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})},SESSION_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})},AI_RATE_LIMITER:{limit:vi.fn().mockResolvedValue({success:true})}};
 }
 const request = (path:string,cookie="a".repeat(64)) => new Request(`https://meal.test${path}`,{method:path==="/api/plan" ? "GET":"POST",headers:{"cf-connecting-ip":"192.0.2.1",cookie:`__Host-meal_session=${cookie}`}});
 
@@ -43,4 +42,57 @@ test("missing or failed limiter fails closed for API without disabling the page"
   const response=await worker.fetch(request("/api/agent"),env);
   expect(response.status).toBe(503);
   expect(await response.text()).not.toContain("private");
+});
+
+
+test("private Python binding handles fixed routes without forwarding identity or query",async()=>{
+  const upstream=vi.fn(async(_request:Request)=>Response.json({liveAvailable:true}));
+  const env={...environment(),MEAL_API:{fetch:upstream}};
+  const response=await worker.fetch(new Request("https://meal.test/api/v1/runtime?upstream=https://evil.test",{headers:{cookie:"private-cookie",authorization:"private-token"}}),env);
+  expect(await response.text()).toBe(JSON.stringify({liveAvailable:true}));
+  expect(upstream).toHaveBeenCalledTimes(1);
+  const sent=upstream.mock.calls[0][0] as Request;
+  expect(sent.url).toBe("http://meal-api.internal/api/v1/runtime");
+  expect(sent.headers.has("cookie")).toBe(false);
+  expect(sent.headers.has("authorization")).toBe(false);
+  expect(sent.redirect).toBe("manual");
+  expect(handlers.app).not.toHaveBeenCalled();
+});
+
+test("private binding is used for the session-owned Agent and propagates cancellation",async()=>{
+  const upstream=vi.fn(async(_request:Request)=>new Response("data: fixture\n\n",{headers:{"content-type":"text/event-stream"}}));
+  const env={...environment(),MEAL_API:{fetch:upstream}};
+  await worker.fetch(request("/api/agent"),env);
+  const agent=handlers.session.mock.calls[0][5];
+  const controller=new AbortController();
+  const response=await agent({safe:"server-owned-context"},controller.signal).catch(()=>new Response(null,{status:503}));
+  expect(response.status).toBe(200);
+  const sent=upstream.mock.calls[0][0] as Request;
+  expect(sent.url).toBe("http://meal-api.internal/agent");
+  expect(await sent.json()).toEqual({safe:"server-owned-context"});
+  expect(sent.headers.has("cookie")).toBe(false);
+  controller.abort();
+  expect(sent.signal.aborted).toBe(true);
+});
+
+
+test("Web uses its private service with public forwarding metadata and no anonymous identity",async()=>{
+  const upstream=vi.fn(async(_request:Request)=>new Response("Oracle Web"));
+  const env={...environment(),MEAL_WEB:{fetch:upstream}};
+  const response=await worker.fetch(new Request("https://meal.test/?view=plan",{headers:{cookie:"private-cookie",authorization:"private-auth",forwarded:"host=evil.test","x-forwarded-host":"evil.test"}}),env);
+  expect(await response.text()).toBe("Oracle Web");
+  const sent=upstream.mock.calls[0][0];
+  expect(sent.url).toBe("http://meal-web.internal/?view=plan");
+  expect(sent.headers.get("x-forwarded-host")).toBe("meal.test");
+  expect(sent.headers.get("x-forwarded-proto")).toBe("https");
+  for(const header of ["cookie","authorization","forwarded"]) expect(sent.headers.has(header)).toBe(false);
+  expect(sent.redirect).toBe("manual");
+});
+
+test("unknown API and Web POST cannot bypass Worker policy through the Node app",async()=>{
+  const upstream=vi.fn(async(_request:Request)=>new Response("Oracle Web"));
+  const env={...environment(),MEAL_WEB:{fetch:upstream}};
+  expect((await worker.fetch(new Request("https://meal.test/api/unlisted"),env)).status).toBe(404);
+  expect((await worker.fetch(new Request("https://meal.test/",{method:"POST",body:"untrusted action"}),env)).status).toBe(405);
+  expect(upstream).not.toHaveBeenCalled();
 });

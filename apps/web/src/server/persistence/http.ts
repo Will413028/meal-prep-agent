@@ -12,12 +12,12 @@ export class PersistenceError extends Error {
 
 export type ProposalInput = paths["/api/v1/proposals/validate"]["post"]["requestBody"]["content"]["application/json"];
 export type ProposalOutput = paths["/api/v1/proposals/validate"]["post"]["responses"][200]["content"]["application/json"];
-export type ProposalValidator = (input: ProposalInput, signal: AbortSignal) => Promise<ProposalOutput>;
+export type ProposalValidator = (input: ProposalInput, signal: AbortSignal) => Promise<unknown>;
 export type BuildInput = paths["/api/v1/proposals/build"]["post"]["requestBody"]["content"]["application/json"];
 export type BuildOutput = paths["/api/v1/proposals/build"]["post"]["responses"][200]["content"]["application/json"];
 export type AgentInput = Omit<AgentRunRequest,"forwardedProps"> & {forwardedProps:{planning:BuildInput;mode?:"fixture" | "live"}};
 export type AgentRunner = (input: AgentInput, signal: AbortSignal) => Promise<Response>;
-export type ProposalBuilder = (input: BuildInput, signal: AbortSignal) => Promise<BuildOutput>;
+export type ProposalBuilder = (input: BuildInput, signal: AbortSignal) => Promise<unknown>;
 
 function normalized(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalized);
@@ -51,7 +51,7 @@ export async function checkCsrf(request: Request, token: string): Promise<void> 
 export async function stateFromRow(row: SessionRow, token: string): Promise<SessionState> {
   try {
     if (row.schemaVersion !== 1) throw new Error("version");
-    const current = row.currentJson === null ? null : validateEvaluation(JSON.parse(row.currentJson));
+    const current: unknown = row.currentJson === null ? null : JSON.parse(row.currentJson);
     if (row.previousJson !== null) validateEvaluation(JSON.parse(row.previousJson));
     return validateSession({schemaVersion:1, sessionGeneration:row.sessionGeneration, planId:row.planId,
       revision:row.revision, expiresAt:new Date(row.expiresAt).toISOString(), csrfToken:await csrf(token),

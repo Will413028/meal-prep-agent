@@ -7,6 +7,7 @@ import { sessionHttp, type ProposalValidator, type ProposalBuilder } from "./htt
 import synthetic from "../../../tests/fixtures/synthetic-evaluation.json";
 import { validateEvaluation } from "../../shared/api/validate";
 import { validateSession } from "../../shared/api/persistence";
+import { pythonBuilder, pythonValidator } from "./python-validator";
 
 let worker: Miniflare;
 let db: D1Database;
@@ -164,6 +165,20 @@ async function initializeHttp() {
     action:{type:"adopt",candidate:evaluation.candidate,scope:evaluation.candidate.meals.map(({day,slot}) => ({day,slot})),runId:crypto.randomUUID()}};
   return {state,headers,payload,evaluation};
 }
+
+for (const route of ["adopt","preview"] as const) test(`untrusted Python ${route} response is validated before returning or writing it`,async()=>{
+  const {headers,payload,evaluation}=await initializeHttp();
+  const context={planId:payload.planId,sessionGeneration:payload.sessionGeneration,baseRevision:0,runId:payload.action.runId,scope:payload.action.scope};
+  const malformed=structuredClone(evaluation) as Partial<typeof evaluation>;
+  delete malformed.mealNutrition;
+  const proposal={...context,evaluation:malformed,diff:[],shoppingDiff:[],prepDiff:[],violations:[]};
+  const send:typeof fetch=async()=>Response.json(route==="adopt" ? proposal : {status:"ready",reason:null,examined:1,proposal});
+  const body=route==="adopt" ? payload : {schemaVersion:1,context,goal:evaluation.candidate.goal,constraints:evaluation.candidate.constraints};
+  const response=await sessionHttp(new Request(`https://meal.test/api/plan/${route==="adopt" ? "actions":"preview"}`,{method:"POST",headers,body:JSON.stringify(body)}),db,()=>now,pythonValidator("http://private.test",send),pythonBuilder("http://private.test",send));
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({error:"calculation_unavailable"});
+  expect(await readSession(db,headers.cookie.split("=")[1],now)).toMatchObject({revision:0,currentJson:null});
+});
 
 test("adoption validates from the stored base, commits once, and rejects a reused operation with different content", async () => {
   const {state,headers,payload,evaluation} = await initializeHttp();

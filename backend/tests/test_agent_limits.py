@@ -49,13 +49,13 @@ def test_provider_failure_is_allowlisted_without_private_error_body(
 def test_total_run_deadline_releases_model_and_never_publishes_partial_result(
     monkeypatch,
 ):
-    monkeypatch.setattr(api, "RUN_TIMEOUT_SECONDS", 0.01, raising=False)
+    monkeypatch.setattr(api, "RUN_TIMEOUT_SECONDS", 0.5, raising=False)
     released = []
 
     async def slow(messages, info):
         try:
             yield "合成部分文字"
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(5)
             yield "不應送達"
         finally:
             released.append(True)

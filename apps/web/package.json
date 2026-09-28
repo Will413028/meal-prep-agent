@@ -9,11 +9,10 @@
     "test": "vitest run",
     "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test",
-    "dev:vinext": "vite dev --port 14319",
-    "build:vinext": "vite build",
-    "start:vinext": "wrangler dev --config dist/server/wrangler.json",
-    "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json",
-    "test:d1": "node scripts/d1-probe.mjs"
+    "test:d1": "node scripts/d1-probe.mjs",
+    "dev:worker": "wrangler dev --config wrangler.jsonc --ip 127.0.0.1 --port 14317 --var MEAL_API_ORIGIN:http://127.0.0.1:14318 --var MEAL_WEB_ORIGIN:http://127.0.0.1:14319",
+    "build:worker": "wrangler deploy --config wrangler.jsonc --dry-run --outdir ../../.artifacts/worker",
+    "deploy:worker": "wrangler deploy --config wrangler.jsonc --env production"
   },
   "dependencies": {
     "@ag-ui/client": "1.0.0",
@@ -23,24 +22,18 @@
     "next": "16.3.5",
     "openapi-fetch": "^0.17.0",
     "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "react-server-dom-webpack": "19.3.0"
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.60.2",
     "@cloudflare/workers-types": "5.20260928.1",
     "@playwright/test": "1.63.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@vinext/cloudflare": "1.0.0-beta.11",
-    "@vitejs/plugin-react": "6.1.1",
-    "@vitejs/plugin-rsc": "0.5.35",
     "esbuild": "0.28.1",
     "miniflare": "5.20260925.0-alpha",
     "openapi-typescript": "7.13.0",
     "typescript": "~5.9.3",
-    "vinext": "1.0.0-beta.13",
     "vite": "8.3.1",
     "vitest": "^4.0.0",
     "wrangler": "4.141.0"

@@ -1,6 +1,6 @@
 # Meal Prep Agent — TDD 實作計畫
 
-更新：2026-09-28。狀態：T00 本機驗證通過；T01／T02 部分 GREEN，T03 最小整合、T04 domain、T05 提案、T06 清單／備餐已驗收。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
+更新：2026-09-29。T00–T10 的功能與本機驗證已完成；T11 實際部署大部分條件已驗，Workers Free CPU 方向待決；T12 真模型矩陣已齊，遠端 CI 與最終對帳進行中。依 [產品規格](product-spec.md)、[營養政策](nutrition-policy.md) 與 [架構](architecture.md) 實作。採 RED → GREEN → REFACTOR，小增量交付；本文件保存細項及執行證據，不另訂產品優先序。
 
 ## 1. 前提與接續方式
 
@@ -40,9 +40,9 @@
 
 | 項目 | 依賴 | 交付結果 | 狀態 |
 |---|---|---|---|
-| T00 | 無 | 可執行測試環境、封裝、基本 CI | 已驗收（本機）：封裝／測試／build；CI 定義已建立，遠端執行於 T12 核對 |
-| T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 部分 GREEN：目標 API／生成契約；Worker DTO 待補；日期／版本於 T05、餐單原值比較於 T04 已驗 |
-| T02 | T01 | 本機身體估算及確認邊界 | 部分 GREEN：八列估算／表單／確認；本機 metadata／鄰級比較已補，保存契約與全路徑隱私 gate 待補 |
+| T00 | 無 | 可執行測試環境、封裝、基本 CI | 已驗收：封裝／測試／build；公開 repo 遠端 CI a97d161 兩 job 成功，新候選仍待 CI |
+| T01 | T00 | API 契約（含 Worker 保存）與已確認目標驗證 | 已驗收：目標 API／生成契約、Worker 保存 DTO／wire、日期／版本與原值邊界於 T04／T05／T07 補齊 |
+| T02 | T01 | 本機身體估算及確認邊界 | 已驗收：八列估算／表單／確認、metadata／鄰級比較，保存契約與全路徑隱私於 T07／T10 補齊 |
 | T03 | T01；可先於 T02 | Agent／AG-UI／workerd／D1 最小整合 | 已驗收（最小整合）：官方 HttpAgent／adapter、run token／取消、workerd SSE／中止、本地 D1 與一次 live；完整 K2/K3 留 T09/T11 |
 | T04 | T01、T03 可行性 | 食譜資料與營養計算 | 已驗收：受控合成資料、份量／來源、Decimal 小計／完整性與三種 mutation |
 | T05 | T04 | 三天提案、局部修改及硬限制 | 已驗收：有限搜尋／canonical API、scope／鎖定／來源、真 HTTP 跨語言契約 |
@@ -51,8 +51,8 @@
 | T08 | T02、T07 | 雙入口與手動操作完整切片 | 本地驗收完成：兩入口、營養／比較、採用換菜恢復及故障唯讀；設計與正確性審查已修正 |
 | T09 | T03、T08 | Agent 對話、工具與失敗恢復 | 已驗收：正式 tools／Worker／聊天、取消與故障恢復、兩輪提案及一次 GLM live 完整工具鏈；品質矩陣留 T12 |
 | T10 | T09 | 多分頁、隱私與限額故障測試 | 已驗收（本地）：入口限流／body／run／token 預算、模式選擇／額度恢復、隱私／雙匿名context與mutation；真部署邊界留T11 |
-| T11 | T10；部署條件具備 | 實際環境與完整 K3 | 進行中：Oracle 主機已確認，容量盤點完成；部署／隔離／回復待驗 |
-| T12 | T11 | live K4 與完整 MVP 驗收 | 未開始 |
+| T11 | T10；部署條件具備 | 實際環境與完整 K3 | 進行中：Oracle Web/API、D1故障／隔離、取消及整組回復已驗；Free CPU驗收方向待決定 |
+| T12 | T11 | live K4 與完整 MVP 驗收 | 進行中：A1／A3／A5／A10 各三次 live、正式入口 Web live 與本機完整回歸通過；A/N/K 對帳、帳戶 Neuron 實量與遠端 CI 待收尾 |
 
 每項可記「未開始／RED／GREEN／REFACTOR／已驗收／受阻」。只有必要案例與外部條件都有證據才標已驗收；以下內容是測試設計，尚不是執行結果。
 
@@ -154,7 +154,7 @@
 依賴：選定 Python 主機、必要外部授權與可用免費模型帳戶條件；本計畫不替代登入／secrets 的授權。
 
 - RED／GREEN：可自動化的 proxy 路徑、錯誤與 SSE 行為先以整合測試驅動；帳戶開通、套件安裝及部署以 smoke 記錄，不偽稱業務 TDD。
-- 驗收：實際 Workers Web、Python service 及固定上游串流；量測 Worker 與 Python 各自資源、斷線、限流、直接後端繞過是否被擋。跑實際 origin 的 A13／A14，確認 Cookie 屬性、身份隔離、安全快取、D1 用量失敗及版本不相容時保留雲端資料。
+- 驗收：實際 Worker 入口、Oracle Next.js Web／Python service 及固定上游串流；量測 Worker CPU 與 Oracle 兩服務各自資源、斷線、限流、直接後端繞過是否被擋。跑實際 origin 的 A13／A14，確認 Cookie 屬性、身份隔離、安全快取、D1 用量失敗及版本不相容時保留雲端資料。
 - 回復：記錄可回復的 Web/API artifact 組合與契約版本；演練回到前一相容 artifact。D1 migrations 採先擴充相容 schema 再部署 consumer；回復應用不盲目 down migration、不清庫。任何破壞性變更須另有資料回復計畫與授權。
 
 ### T12 — 完整驗收與交付
@@ -168,20 +168,20 @@
 
 | 規格案例 | 主要增量 | 最終證據 |
 |---|---|---|
-| A1、A2、A12 | T01、T02、T08 | 目標 API／estimator、兩入口瀏覽器流程 |
-| A3、A4、A8 | T04、T06、T08 | 外食、null、涵蓋餐次與清單畫面 |
-| A5、A7 | T05、T08、T09 | scope／locks、卡片與對話同規則、無可行解 |
-| A6、A11 | T06、T08 | 庫存／單位／設備、分裝與步驟 |
-| A9 | T05、T07、T08 | 預覽不變、原子採用、復原、過期／重複提案 |
-| A10 | T03、T09、T10、T12 | 工具／模型／串流失敗、重試及免費耗盡 |
-| A13、A14 | T07、T08、T10、T11 | D1／Cookie 歸屬、雙頁 CAS／清除／到期／寫入失敗 |
-| N1、N2、N3 | T02 | 獨立 golden、所有輸入端點與適用分流 |
-| N4、N5、N6 | T01、T04 | API 端點、Decimal 容許差／衝突 |
-| N7、N8 | T01、T02、T04、T08、T10 | 缺值、確認邊界、全資料路徑隱私 |
-| K1 | T00、T01、T02、T04 | 封裝／生成契約及 N1–N8 的相關部分；N8 整合證據於 T10 補齊 |
-| K2 | T03、T09 | 真框架＋正式 tools＋live 往返及取消 |
-| K3 | T03、T07、T10、T11 | workerd 與實際部署、Python、保存完整驗證 |
-| K4 | T12 | 指定案例各三次 live 與用量／耗盡證據 |
+| A1、A2、A12 | T01、T02、T08 | `test_goals.py`、`estimate.test.ts` 八列 golden／端點、`home.spec.ts` 兩入口、`planner.spec.ts` 引導保存；A1 live 6／7／8 通過 |
+| A3、A4、A8 | T04、T06、T08 | `test_nutrition_totals.py` 外食 null／部分餐次、`test_planning_search.py` 固定外食、`planner.spec.ts` 外食保存；A3 live 8／9／11 通過 |
+| A5、A7 | T05、T08、T09 | `test_planning.py`、`test_planning_search.py` scope／locks／無解，`planner.spec.ts` 換菜與兩輪 Agent；A5 live 7／8／9 通過 |
+| A6、A11 | T06、T08 | `test_shopping.py` 庫存合併／勾選、`test_prep.py` 設備序列／分裝、`planner.spec.ts` 保存清單 |
+| A9 | T05、T07、T08 | `sessions.test.ts` CAS／operationId／undo／過期、`planner.spec.ts` 預覽採用復原與重開 |
+| A10 | T03、T09、T10、T12 | `test_agent_limits.py`、`chat-faults.spec.ts` 取消／中斷／重試／429；A10 live 5／6／7 明確設備不足，額度耗盡是注入驗證 |
+| A13、A14 | T07、T08、T10、T11 | `sessions.test.ts` 身份／CAS／到期／清除、`persistence.spec.ts` 真瀏覽器雙身份、`t11-d1-failure-*.log` 真 D1 故障與回復演練 |
+| N1、N2、N3 | T02 | `estimate.test.ts` 八列獨立 golden、蛋白質及邊界／分流、`goal-state.test.ts` 確認與來源 |
+| N4、N5、N6 | T01、T04 | `test_goals.py` 十進位原值／容差／能量衝突，`test_nutrition_totals.py` 未取整達標與未知 |
+| N7、N8 | T01、T02、T04、T08、T10 | `test_nutrition_totals.py` 缺值／來源、`goal-state.test.ts` 確認邊界、`home.spec.ts` 問卷隱私、`sessions.test.ts` 雙身份 Agent context |
+| K1 | T00、T01、T02、T04 | Python wheel 與封裝、`pnpm contracts:check`、`pnpm test:contracts` Python2＋TS2、`test_goals.py`／`estimate.test.ts`／`test_nutrition_totals.py` |
+| K2 | T03、T09 | `test_planning_agent.py` 正式 tools／官方 AG-UI、`test_agent_disconnect.py`／`test_sse_heartbeat.py`、`t12-live-*.json` 工具往返、正式入口 live 瀏覽器 |
+| K3 | T03、T07、T10、T11 | workerd40、正式 HTTPS 四例、真 D1 故障／取消／相容回復；Worker Free CPU 仍未有穩定 ≤10ms 證據，**待決** |
+| K4 | T12 | 四案例各三次 live、token／延遲／來源及受控繁中畫面、429 注入；Neuron 費率估算已記，Dashboard 帳戶實量**待核** |
 
 ## 6. 執行證據格式
 
@@ -352,3 +352,70 @@
 
 - Will 選定既有 Oracle 主機，Meal Prep 使用獨立容器、網路與 Tunnel，不共用其他產品資料／憑證。唯讀 `ssh oci-a1` 盤點：aarch64、4 CPU、available memory 21,263 MiB、root 121G available；即時證據 `.artifacts/t11-host-inventory.log`。不增 VM／disk 配置，不將瞬間空閒視為負載驗收。
 - CI 等價 lint 揭露 `--config backend/pyproject.toml` 與自動探索的 first-party 分類不同，21 個 I001；明確設定 known-first-party meal_prep 後同命令 check／format 通過。這是工具設定修正，不是產品行為 TDD；RED／GREEN 見 `t10-ci-lint.log`／`t11-ci-lint-green.log`。
+
+- T11私有上游：新增MEAL_API VPC binding，既有Python allowlist／body／timeout／錯誤映射保留，透過注入fetch供Validator／Builder／Agent共用；Worker攔截固定公開Python routes，方法不符405，query／Cookie／Authorization不轉送。兩行為assertion RED→Web108 GREEN、typecheck與workerd35 GREEN（`t11-vpc-{red,green,types,workerd}.log`）。初版測試JSON解析／uncaught exception已先改為明確斷言再重跑RED，不列為最終行為證據。
+- 遠端CI：a97d161首次兩job未啟動，GitHub註記billing/spending limit；Will明確要求repo改public。檢查Git歷史329 blobs，未命中secret pattern，沒有追蹤環境檔／AGENTS.local／secrets；已改PUBLIC並重跑。run36443334102的python與web job均success。此run覆蓋a97d161，不代表尚未提交T11變更的CI已驗。
+- 外部資源：Wrangler OAuth建立meal-prep-production D1並套0001 migration；既有API token無D1／Tunnel建立權限（401／403），改由已授權OAuth完成專用Tunnel／VPC。沒有提高帳戶付費等級；subscriptions仍僅r2_paid，既有兩Worker均無ratelimit bindings，1431701–1431703未與它們共用。resource IDs在production Wrangler及ignored `t11-resources.json`。
+- Oracle候選image t11-candidate1建置成功；專案API／Tunnel啟動healthy，無host port，network meal-prep_private；Dockerfile allowlist排除secret，API停用access log。首次macOS rsync --relative沒有套用/./截斷，改明確source→target並移除本次誤建的專案內Users目錄，不影響既有專案。
+- 初次Worker部署version6fe59fcb-596a-4a5b-8979-021a96bc505c，https://meal-prep-agent.fathompod.workers.dev。production build通過，Chrome頁面200、runtime200/liveAvailable=true；Python urllib探測遇Cloudflare1010，未當成應用故障。正式D1／CAS／UI案例執行中；CPU、取消、隔離、回復與獨立審查尚待，不宣稱T11完成。
+
+- 正式HTTPS browser：`playwright.deployed.config.ts --grep 'manual goal creates|Worker persists canonical'` 2 passed（`t11-deployed-flow.log`），驗CAS 200/409、匿名隔離／Cookie／重開／復原／清除；`--grep 'guided estimation|Agent produces two separate'` 2 passed（`t11-deployed-agent.log`），引導問卷不出本機與fixture兩輪提案採用已驗。故障route注入仍明確屬模擬，不等同真D1故障。
+- T11獨立design-review與correctness皆無material finding（純靜態），部署驗收持續；parent second-brain同時出現其他工作線commit d4e8af85，未將其歸因reviewer或碰觸。
+- CPU gate尚未通過：safe-filtered Wrangler tail第一批21events CPU最高50ms，全部ok；按path補測13events，root [13,13,8]ms、preview[8,9,8]、actions[13,14]，不是可穩定低於Workers Free 10ms的證據。官方limits說明容許偶發超限，不以目前HTTP200當作通過。API取樣CPU17.88%、RAM92.59MiB/512MiB；public backend14318外部無法連線，Docker無host ports／專用network。接續先驗Ajv inlineRefs:false是否降低巨大inline validators開銷，再處理SSR；原基線artifact保留，不擅升級付費。
+
+- Ajv實驗：inlineRefs:false重新生成後wire2+2／Web108／production build皆通過，bundle3422→3042KiB；部署2182a2d7-26bb-4bd3-baf6-9c2eb4018dfa後兩正式流程通過，但tail樣本root[64,9,115]ms、preview16、actions45，不能證明CPU gate改善。撤回此生成設定，不將bundle變小當成性能GREEN；此版暫仍在遠端，待後續已驗artifact替換。參考tech頁及官方vinext#2911記錄bare-Node prerender與cloudflare:workers限制，Web部署選型需要重新判斷。
+
+- 回復演練：以2182a2d7建立revision1合成快照，Worker rollback到6fe59fcb成功；API保持同一相容image t11-candidate1，stop→start無process重疊。真瀏覽器用原匿名身份讀回的完整D1狀態與rollback前deep-equal，UI版本1與fixture SSE完成（`t11-rollback-{before,worker,api,after}.log`）。API沒有兩個不同runtime artifact，不宣稱驗過API降版。
+- 本專案prerender實測：CLI舊參數不支援，改installed vinext config `prerender:{routes:"*"}`後，build-time Node載入cloudflare:協定回ERR_UNSUPPORTED_ESM_URL_SCHEME（`t11-prerender-config.log`）。探測設定finally還原；Ajv實驗也已生成回原設定，遠端已rollback基線。現行productiondist是失敗prerender中間產物，下次部署／本地workerd前必須按環境重新build。
+- 已將Web部署選型交Will：建議Next.js Web亦移Oracle專用容器、Worker仍管公開入口／D1／身份；其他選項為继续Cloudflare adapter或靜態前端。此為architecture原Web部署位置的改動，等待選擇；不重問登入下載。API CPU優化仍需獨立驗，不假稱只移SSR即可完成全部gate。
+
+- 真D1舊格式：僅將專用合成rollback fixture之schemaVersion暫改99，Chrome GET409／舊格式UI，明確開始新規劃建立revision0／current=null。finally改回schema1後，以原匿名身份讀回完整狀態，與測試前deep-equal（`t11-legacy-restored-state.log`）；CLI --file僅回import統計，未將它當成查詢欄位值證據（`t11-legacy-{incompatible,browser,retained,restore}.log`）。沒有刪原餐單或以mock當D1證據。完整T11仍等待Web部署選擇、CPU、真取消／D1故障與最後回歸。
+
+- 2026-09-29 Will 確認 Web 也移至既有 Oracle；採原生 Next.js standalone，Worker 保留公開入口／D1／身份與 MEAL_WEB、MEAL_API 固定 VPC proxy。撤除 vinext runtime／部署依賴；不變更既有 domain、公開契約、匿名 D1 或免費模型約束。新增 Web 邊界兩例真 assertion RED→GREEN，拒絕未知 API／非 GET HEAD，剝除身份 headers（t11-web-entry-{red,green}.log）。
+- 移轉驗證：Next dev 經此正式入口的 HMR 無法連線，改以 production 驗證後 hydration 通過。原生 Next 的 route announcer 另有 role=alert，舊全頁 alert locator 歧義導致 5 例失敗／30 通過；測試改依預期訊息篩選，保留原行為斷言，改用實際 standalone artifact 重跑。Oracle 首輪 Web build 缺 nutrition-v1.json，已補精確 build allowlist；不將 build／測試設定故障計為 TDD RED。新架構完整部署及 CPU 驗收仍進行中。
+- Oracle 原生 Web image `meal-prep-web:t11-native1` 已啟動 healthy；Worker `ea2f2581-4d4f-466d-ac32-aa275d936e60` 接兩個私有 VPC。standalone＋workerd 35 passed，Web110與typecheck通過；正式origin四例（D1隔離/CAS、手動、引導、兩輪Agent）全部通過。容器快照Web49.49MiB/API82.86MiB/Tunnel18.3MiB，三者readonly且無host port。這是當下資源快照，不是壓力測試。
+- 新路徑安全CPU樣本 `.artifacts/t11-native-route-metrics.json`：首頁0–1ms／static0–1ms，actions15–84ms、preview13–26ms，全部outcome=ok仍未通過Free CPU目標。共用生成schema graph優化中；不移除契約驗證。獨立design-review重新檢查Web遷移16項機制，NO DESIGN FINDINGS；scope核對repo/parent無審查者寫入或commit。
+- 真D1可控故障：只對既有專用合成餐單建立暫時before UPDATE/DELETE trigger，RAISE ABORT使真binding返回503；UI未冒稱保存，重新讀回完整原狀態；清除失敗顯示唯讀且完整原列保留。finally DROP兩trigger成功，`.artifacts/t11-d1-failure-{drill,browser,restore}.log`。此為真D1 query故障注入，不是實際耗盡帳戶quota，也不是browser mock。
+- Ajv graph 合併後 bundle1558.97→405.03KiB，Web110／wire Python2＋TS2通過；workerd首輪34通過1例上游等待逾時，reordered單例重跑1.3秒通過，尚須最後整套回歸。部署c42e7cfa四正式流程通過，但actions12–38ms、preview12–23ms仍未過CPU gate（t11-shared-route-metrics.json）。本機CPU profile只提供取樣線索，不取代遠端CPU計量；不宣稱縮包已解決效能。
+- 真取消RED：透過正式Worker/VPC與Oracle API注入FunctionModel合成長串流，瀏覽器取消後8秒內provider iterator finally未執行。補enable_request_signal（官方要求）後444fe6c2重驗仍RED，需繼續定位VPC／response stream取消；兩次演練皆finally恢復原live API healthy。此不是真Cloudflare模型品質測試，不計入K4。
+- Oracle Web與shared validator correctness唯讀審查無material finding；scope未有審查者修改／commit。T11仍未完成，不提交階段完成標記。
+- 取消定位：Worker安全診斷只記固定marker，tail觀察responseStreamDisconnected但未見signal marker；移除診斷logging後已部署乾淨Worker07c874fa。保持路徑、改合成provider每秒yield，取消1.3秒釋放；改回原60秒靜默source後，新增2秒SSE comment heartbeat的API candidate2真演練4.1秒釋放（t11-cancellation-browser.log），finally恢復正常live API。這證明需靠定期寫入讓現有HTTP/VPC路徑觀測中止，不宣稱已定位Cloudflare內部實作缺陷。
+- Heartbeat採原官方adapter編碼後加`: keepalive`註解，不改AGUI事件，不另建Agent框架。首次heartbeat缺失assertion RED→GREEN；跨yield deadline被逐次anext task拆斷的回歸RED→單一producer Task GREEN；独立correctness另找queue滿時deadline取消producer後持續heartbeat，新增slow-consumer真RED→監控producer結束並顯式關閉內層source GREEN。queue maxsize1保留backpressure、finally清理；最後Python157／ruff通過，mypy及新API candidate3重部署／取消複驗中。
+- Fail-fast Ajv只消費boolean結果；`rg -n '\.errors|ajv.errors|validator.errors' apps/web/src --glob '!*-validator.js' --glob '!validators.js'`未見錯誤集合consumer，改allErrors=false保留接受／拒絕語義。Web110、wire2+2、types／drift與單worker模式完整workerd35通過；正式四流程通過。第一輪CPU tail在清理已退出process group時失敗而未落檔，沒有當作CPU證據；改安全落檔與確認子process狀態後重新量測。
+
+- 最終 transport 複驗：API `t11-candidate3` 經正式 Worker／VPC 的靜默合成 provider，在瀏覽器取消後 4,018ms 執行 finally；演練後恢復正常 live factory 且 healthy（`t11-heartbeat-final-cancellation.log`）。新增正式 PlanningAdapter＋FunctionModel 慢讀測試通過；reviewer 撤回未重現的內層清理推論，已修的 material finding 為 queue 滿時 producer 結束後無限 heartbeat。Python158、Web112、workerd35、Node12 passed；後兩命令分別 `MEAL_TEST_WORKER=1 pnpm --filter @meal-prep/web exec playwright test --workers=1` 與 `pnpm test:e2e`，證據 `t11-final-workerd.log`／`t11-final-node.log`。
+- Python transport 回傳 unknown，由 persistence 邊界驗證一次；current 由完整 SessionState 驗證，previous 仍獨立驗證。新增真正經 pythonBuilder／pythonValidator 的缺逐餐營養反例，503且無D1寫入。獨立 design-review 覆蓋21項機制，NO DESIGN FINDINGS。
+- 整組相容回復已驗：Worker `02a3066d-de34-44ca-90d2-a8bdeab89f3b`／API `t11-candidate3`／Web `t11-native2` → Worker `ea2f2581-4d4f-466d-ac32-aa275d936e60`／API `t11-candidate1`／Web `t11-native1` → 恢復目前組合。兩次都驗 hydration、fixture SSE 與原匿名身份完整D1快照deep-equal；未改migration或清庫。命令為 `.artifacts/t11-native-rollback-drill.py`，結果在 `t11-native-rollback-{drill,during,after}.log`；恢復容器healthy。
+- 最新安全CPU取樣 `t11-once-route-metrics.json` 共84events，actions 3–27ms、preview 7–25ms，全部API outcome=ok；首頁0–1ms。`t11-once-tail.py` 明確指定 production config，僅保留path／CPU／wall／outcome等技術欄位。這不是穩定符合Free 10ms的證據；未將縮包或HTTP成功當CPU GREEN。已請Will選擇免費展示接受限制、繼續架構調整或評估付費Workers，尚未變更驗收標準或付費等級。
+
+### T12 執行紀錄（2026-09-29）
+
+- 開工先讀 A1–A14／N1–N8／K1–K4 原規格與既有測試；T11 CPU 方向尚待Will決定，T12 先進行獨立的真模型品質矩陣，不提前標驗收。Cloudflare Workers AI Dashboard 當日已用 539.53／10,000 Neurons；固定 GLM-4.7-flash，不啟付費。新增 `scripts/live-acceptance.py`，只用合成資料，逐次記工具、canonical 結果、model usage、文字及延遲到 ignored `.artifacts`；不以此腳本輸出取代 Dashboard 的 Neuron 實量。
+- A1 首次 live RED：`uv run --env-file .env.cloudflare.local --project backend --frozen python scripts/live-acceptance.py A1 --trial 1`，正式 find_recipes／build_proposal 均有呼叫、HTTP200／RUN_FINISHED，但 `proposal_unavailable: not_found_within_search_limits`、沒有 canonical 提案（`t12-live-A1-1.{log,json}`，55.805秒、input25,750／output3,736 tokens、3 requests／2 tools）。模型文字另有錯字及臆測菜單描述，未達繁中品質。腳本最初把「不會聲稱已保存」誤判為已保存，已移除此不精確字串判斷；真 RED 為沒有可採用提案。正調查 tool arguments，再決定最小修正與重驗。
+- A1 第二筆 live 有 canonical 提案與兩正式 tools（`t12-live-A1-2.json`，50.588秒、input58,960／output2,000 tokens），但長文字把**每日**2012.5 kcal 標成「三天總計」，又說「我會將其標記為已採用」，仍不達正確敘述與提交邊界的品質門檻。資料卡片的 canonical 計算本身通過。模型文字已改為只簡述未採用提案、合成來源，具體餐點／數值由權威預覽呈現；後續 live 重驗中。
+- 真模型能在tool參數中改已確認constraints或加入使用者未確認fixed meals：`test_model_cannot_change_confirmed_conditions_while_building` 兩反例均在原碼產生 `proposal_ready`，2 RED（`t12-agent-conditions-red.log`）。`PlanningRun` tool 現於執行前拒絕改動並要求模型重試，2 GREEN（`t12-agent-conditions-green.log`）；UI表單仍可由使用者明確修改條件。本防線不依賴提示詞遵守情況。
+- A1 第三筆 live 的正式工具與 canonical 提案通過（`t12-live-A1-3.json`，51.203秒、input59,622／output680 tokens），但模型仍在文字說「採用首次配餐選擇」，不能以prompt縮短就宣稱品質合格。Web真實 HttpAgent 流注入「我已保存成功」後，原畫面確實顯示假成功，行為 RED（`t12-live-prose-red2.log`；首次測試把live模式送往無模型的synthetic上游，503屬環境設定，不計RED）。現只依已驗 canonical proposal／reason 顯示繁中對話摘要，仍保留正式模型工具決策與AG-UI事件；同一真 workerd 瀏覽器測試 GREEN（`t12-live-prose-green.log`）。原始模型文字留在 ignored 驗收artifact供品質診斷，不當成已驗事實呈現給訪客。
+- A3 真模型把固定外食早餐從初次規劃 scope 排除，`t12-live-A3-4.json` 得 `scope_incomplete`。加 `test_initial_plan_uses_confirmed_full_scope_even_when_model_omits_fixed_meal` 行為 RED（`t12-initial-scope-red.log`）後，初次規劃只用已確認完整範圍；該測試與 agent 組 GREEN（`t12-initial-scope-green.log`），A3-5／6／7 的 3 筆真模型皆產生 canonical 提案、保留外食鎖定與未知蛋白質。其後 tool surface 重構保留此已確認範圍規則。
+- A5-4／5 真模型反覆送多餘 `snack` 與錯誤的 `YYYY-MM-DD: slot` key，工具拒絕；不是有效提案。改為一筆 typed `replacement={day,slot,recipeId}`，正式 domain scope／replacement 由工具建立，不讓模型輸入已確認條件。`test_local_replacement_uses_the_adopted_base_and_retains_every_other_meal` RED→GREEN（`t12-typed-replacement-red.log`、`t12-typed-compact-green.log`），未指定替換時不發布假變更。A5-6／7／8 三次真模型皆保留其他餐、只換第二天午餐。
+- 模型原本收到完整 `BuildProposalResult`（含整份營養／清單／步驟）與完整食譜，浪費免費 token。`test_model_receives_compact_tool_result_while_client_gets_canonical_proposal` 與 `test_recipe_tool_lists_source_and_small_controlled_choices` 分別 RED（`t12-compact-tool-red.log`、`t12-compact-recipes-red.log`）→ GREEN（`t12-typed-compact-green.log`、`t12-compact-recipes-green.log`）；完整 canonical 只留在 request-scoped context 給瀏覽器，模型僅收 status/reason 與有來源的受控食譜摘要。A5-7 相較 A5-3 的 input tokens 26,258→11,604、延遲12.359→5.058秒；只是不同隨機回合的觀察，非因果效能基準。
+- 獨立設計審查 2 項發現均改：受控 `clarification_required`（meal／recipe／conditions）讓模糊要求顯示固定繁中追問，`test_clarification_is_structured_and_cannot_publish_a_proposal`、瀏覽器追問各 RED→GREEN（`t12-clarification-{api,ui}-{red,green}.log`，UI RED 的首次啟動因本機磁碟滿而失敗不計行為證據，後以 `t12-clarification-retry-ui-red.log` 重跑）；重試不再把同一句使用者訊息重複加入 model history，`t12-clarification-retry-ui-{red,green}.log`。審查者唯讀、未改檔或 commit；最終 diff 與 reviewer scope 已核對。
+- A10-2 真模型只查食譜便結束，沒有 canonical 結果；A10-4 在初次規劃不斷傳入局部換菜參數並觸及 `run_limit`，均不列為通過。`test_recipe_lookup_without_a_proposal_reports_an_explicit_model_failure` RED→GREEN（`t12-no-model-proposal-api-{red,green}.log`）：已有工具但無可驗結果回 `model_no_proposal`，畫面有明確狀態及重試；既有失敗畫面補重試，真 workerd `t12-unavailable-retry-ui-{red,green}.log`。初次規劃忽略模型送出的局部換菜參數，始終採已確認 full scope，`test_initial_plan_ignores_a_model_suggested_local_replacement` RED→GREEN（`t12-initial-replacement-{red,green}.log`）。A10-5／6／7 三次真模型皆回 `equipment_unavailable`，無 ready 提案。
+
+- 審查續查發現 `proposal_unavailable` 會附加受控助理失敗摘要，重試因此再加一則相同使用者訊息。真 workerd 瀏覽器 `live chat explains a tool failure...` 先得到 history user count `[1,2]` RED（`t12-unavailable-history-red.log`），改以原 user turn ID 截回該訊息後與既有 HTTP 失敗重試同測 `[1,1]` GREEN（`t12-retry-history-green2.log`）。模型純文字、完全沒有工具時 UI 同樣沒有可驗結果；`test_formal_agent_text_only_cannot_be_adopted` 的 `model_no_proposal` assertion RED→GREEN（`t12-text-only-{red,green}.log`），最後澄清工具無實際結果也回此狀態。
+- 新 typed replacement 規則使已有 base、卻未提供換菜資訊的**合成展示**工具失敗；首次完整 workerd 37 passed／3 failed，三例都在已採用餐單後要求 fixture 再提案（`t12-workerd-full.log`）。為維持「不理解自由文字」的展示語義，fixture 現從已確認範圍、未鎖餐及受控食譜挑第一筆由正式 domain 預先證實可行的單餐替代，送入同一 typed `build_proposal`；live 模式不自動選替代。`test_fixture_with_adopted_base_demonstrates_one_controlled_change` 無 ready RED→GREEN（`t12-fixture-adopted-{red,green2}.log`）；真變更會使 D1 revision 2→3，瀏覽器預期已據此更新。
+- 獨立審查再指出 fixture 在**全部已鎖或無可行替代**時送空工具參數，`ModelRetry` 最終只會成泛用錯誤。`test_fixture_with_all_meals_locked_reports_lock_conflict` 先因 RUN_ERROR 紅（`t12-fixture-no-choice-red.log`），分出 typed fixture choice／受控不可提案原因後 GREEN（`t12-fixture-no-choice-green.log`）；進一步要求全鎖明確回 `locked_scope_conflict`，先 assertion RED→GREEN（`t12-fixture-lock-reason-{red,green}.log`）。無候選但未全鎖回 `no_controlled_substitute`。同一正式工具發布 `proposal_unavailable`、不產生 ready；審查最終回報 NO DESIGN FINDINGS，reviewer 唯讀、未修改檔案或呼叫 live API。
+
+K4 使用固定 `@cf/zai-org/glm-4.7-flash`、合成食譜 `synthetic:recipes-v1`，A3 另含使用者輸入的固定外食 `user:user-v1`。下表每列依 trial 順序記錄實際模型 `run_usage` 與端到端秒數；Neuron 是依 [Cloudflare 模型費率](https://developers.cloudflare.com/workers-ai/platform/pricing/) 的 **估算**（input tokens × 0.0055 ＋ output tokens × 0.0364），並非帳戶實際扣量。
+
+| 案例／trial | 通過的可驗條件 | 延遲秒 | input tokens | output tokens | 估算 Neurons |
+|---|---|---|---|---|---|
+| A1 6／7／8 | 手動目標、九餐、正式雙工具及未採用 canonical 提案 | 13.274／6.143／6.458 | 9792／9438／9504 | 922／288／500 | 87.42／62.39／70.47 |
+| A3 8／9／11 | 固定外食鎖定、未知蛋白質 null、不入自煮採買／步驟 | 35.069／5.941／40.495 | 10168／10334／10442 | 128／230／298 | 60.58／65.21／68.28 |
+| A5 7／8／9 | 第二天午餐單餐換 tofu-rice，其他餐完整不變 | 5.058／5.664／4.256 | 11604／11592／11616 | 232／234／158 | 72.27／72.27／69.64 |
+| A10 5／6／7 | 設備不足回 `equipment_unavailable`，無 ready | 3.769／5.626／31.359 | 8728／8804／8826 | 104／270／250 | 51.79／58.25／57.64 |
+
+12 筆納入案例的費率估算合計 796.21 Neurons；`uv run --env-file .env.cloudflare.local --project backend --frozen python scripts/live-acceptance.py <A1|A3|A5|A10> --trial <未使用編號>` 可重跑，原始事件與結果是 ignored `.artifacts/t12-live-<案例>-<trial>.events/.json`。A3-10 因 60 秒 timeout 且無 usage／proposal 排除，未充作通過。繁中品質驗的是訪客可見的受控繁中狀態、追問、失敗與 canonical 預覽；原始模型文字曾錯稱已保存與營養總數，只作忽略追蹤的診斷，從 live UI 隔離。模型額度 429／cooldown 由故障注入測試證實，沒有故意耗盡帳戶；真額度日用量須另以 Dashboard 核對。
+
+- 本機最終候選：Python `168 passed`（`t12-python-final3.log`），Web Vitest `112 passed`（`t12-web-unit-final.log`）、workerd Playwright `40 passed`（`t12-workerd-final.log`）、Node Playwright `12 passed`（`t12-node-e2e.log`）；mypy 39 source、ruff check／format、TS typecheck、契約生成檢查及 wire Python2＋TS2、Next 與 Worker build 皆通過對應 `t12-*-final*.log`。最後 fixture 分流變更後 Python168及workerd40重跑；Node／Web／契約路徑未受變更。完整 diff `git diff --check` 通過。
+- 部署候選：只用 `git ls-files --cached --others --exclude-standard` 精確允許的 130 個 Docker build inputs 傳到既有專用 Oracle 目錄，未傳 env／AGENTS.local／artifacts。首輪 Web image 因 context 缺 `synthetic-evaluation.json` 而 TypeScript build 失敗；補 `.dockerignore` 與 Web Dockerfile 的 test-fixture allowlist 後重建成功，屬封裝錯誤，不冒充業務 RED。新 immutable tags API `t12-final1`（image sha256:1a52819c...）、Web `t12-final1`（sha256:936cd623...）；Compose API／Web／Tunnel healthy，無 host ports，快照 RAM 84.22／48.61／17.75 MiB。Worker 沿用已驗 `02a3066d-de34-44ca-90d2-a8bdeab89f3b`，D1 schema 不變；前一組相容映像保留可回復。
+- 正式 HTTPS 入口四個合成瀏覽器案例全部通過：D1 身份隔離／CAS、手動目標採用換菜重開、引導估算、兩輪 Agent（`t12-deployed-four.log`）。另外 `scripts/live-browser-acceptance.mjs` 明確選 live，在真 Worker／VPC／Oracle 上取得 HTTP200、受控九餐預覽與未採用狀態，兩次 7 秒（`t12-live-browser-{1,2}.json`）。首次腳本試圖用 Playwright `response.text()` 讀串流，在 Chromium 得 `Network.getResponseBody` 無資料；改以真瀏覽器已驗 UI、請求 mode、HTTP 與九餐卡片判定，未把無法讀到的每輪 usage 虛構為正式入口證據。後端 12 筆 live 案例另有真 AG-UI `run_usage`。

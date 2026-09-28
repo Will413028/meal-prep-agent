@@ -1,6 +1,6 @@
 # Meal Prep Agent — 技術選型與架構
 
-更新：2026-09-28。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。這是已確認的開發方向；已有應用骨架、目標 API、生成契約與本機估算；尚未部署，完整 K1–K4 仍待驗收。
+更新：2026-09-29。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。雙入口、餐單與正式 Agent、匿名 D1 保存均已實作；Oracle Web／API 與 Cloudflare 入口已部署。K1／K2 本機與 live 證據、K3 部署大部分條件及 K4 四案例矩陣見 [實作計畫](implementation-plan.md)；Workers Free CPU 與帳戶 Neuron 實量仍待最後驗收。
 
 [產品規格](product-spec.md) 定義 A1–A14；[營養政策](nutrition-policy.md) 定義數值、公式及 N1–N8。本文件是技術選型與模組責任的主要依據。
 
@@ -30,9 +30,11 @@
 | 保存 | Worker 經 D1 binding 存取，SQL migrations 版本化；匿名 Cookie 識別擁有者，單列 CAS 更新 current／previous；Web 只留記憶體鏡像 |
 | 工具 | Web 使用 pnpm、Python 使用 uv，各自鎖定依賴；pytest、Vitest、Playwright 依責任驗證 |
 
-Web 優先評估 Cloudflare Workers 的 [vinext 路徑](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)，不符需求再評估 [OpenNext](https://developers.cloudflare.com/workers/framework-guides/web-apps/opennext/)。實際依賴版本及指令在整合驗證後寫入 lockfile 和 README，不預先宣稱任一套件可直接部署。
+Web 採原生 Next.js standalone，與 FastAPI／PydanticAI 分別部署到既有 Oracle VM 的專用容器。2026-09-29 經使用者確認：vinext SSR 實測超過 Workers Free CPU 預算，預先渲染亦未通過；因此撤除 vinext runtime，保留 Next.js 與原有產品契約。相較將 SSR 留在 Worker，這增加 Web 容器的維運責任，但可使用原生 Next.js 且不啟用付費 Workers。
 
-FastAPI／PydanticAI 在獨立 Python 主機執行，不放進 workerd。Workers 提供 Web、匿名 session／餐單保存 API 與固定上游的 Python／AG-UI proxy：限制路徑、方法與 body，不能成為任意 URL proxy；使用者資料回應不得共享快取。Python 主機已由使用者選定既有 Oracle VM；採專案獨立容器、網路與具名 Tunnel，透過 Workers VPC 固定服務 binding 隔離入口，不新增 VM 規格或磁碟。容量、資源限制、串流及實際入口隔離由 T11 驗證；不複製其他產品的環境檔或憑證。
+Cloudflare Worker 提供公開入口、匿名 session／餐單保存 API 與固定上游 proxy，不執行 Next.js SSR。MEAL_WEB VPC binding 僅代理 GET／HEAD 頁面及靜態資源；已知 API 路徑由 Worker 處理，未知 API 拒絕，不轉送給 Web。MEAL_API VPC binding 代理固定 Python 路徑，限制方法與 body。兩個上游都不接收匿名 Cookie 或 Authorization；使用者資料回應不得共享快取。
+
+Oracle 的 Web、API 與具名 Tunnel 使用專案獨立容器／網路，不發布 host port，也不設公開 Tunnel hostname。模型憑證僅交給 API；Web 不持有 D1 或模型憑證。Worker 經兩個固定 VPC service 連線；本機測試才使用明確 loopback origin。容量、資源限制、串流、Worker API CPU 及實際入口隔離由 T11 分別驗證，SSR 搬移不代表保存 API 自動通過 Free CPU gate。部署及回復命令見 [deploy/README.md](deploy/README.md)。
 
 免費模型首個候選為 Workers AI `@cf/zai-org/glm-4.7-flash`，依據 [模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。Python 透過 [OpenAI-compatible endpoint](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/) 接入；資格、工具往返及 PydanticAI 相容性仍須實測。憑證只留後端；不因介面相容就宣稱整合完成。
 
@@ -143,6 +145,8 @@ DRI 係數及 golden fixtures 以版本化政策資料維護，Web 由該資料�
 
 初始 tools 為 find_recipes、build_proposal，呼叫相同 application use cases；不開放任意網頁、檔案或任意程式執行。prompt、model 與 tools allowlist 由伺服器決定；請求僅攜帶有界的必要上下文，不保存跨使用者全域 run state。
 
+模型判讀自然語言並選擇受控工具；對話中的餐單結論只根據通過驗證的 `proposal_ready` 或 `proposal_unavailable` 原因顯示。模型自由文字不直接當作營養數值、已採用狀態或已保存證明。已確認目標、限制與固定餐點只能由使用者表單確認，tool 不接受模型在本輪改寫；預覽卡片呈現 canonical 來源與數字。
+
 依 [PydanticAI AG-UI 文件](https://pydantic.dev/docs/ai/integrations/ui/ag-ui/)，取消可能仍輸出 `RUN_FINISHED`。因此單憑結束事件不能認定成功：只有 application 明確輸出 `proposal_ready`、候選通過完整驗證且 run／revision 仍有效，UI 才允許採用。取消或失效立即撤銷本地 run token，晚到事件丟棄。斷線時清理串流與 run，不承諾已送出的 provider 工作一定停止。
 
 HTTP 重試可能再次執行模型，不承諾模型呼叫 exactly once。採用是獨立的保存操作，以伺服器 revision 與 operationId 防止重複套用；網路斷線不等於寫入失敗，重試前須讀回確認。
@@ -155,7 +159,7 @@ Worker 以密碼學安全亂數建立至少 256-bit opaque token，透過 `__Hos
 
 首次使用以同 origin 的 `POST /api/session` 明確建立空 session；普通讀寫遇缺少／未知／到期 Cookie 不自動重建。使用者可選擇開始新計畫；沒有帳號、找回連結或跨裝置登入。所有讀寫均由 Worker 依 Cookie 查擁有者，不採信 request body 的 owner；異主 planId 與不存在回相同 not-found。寫入驗證 Origin、JSON content type 及 CSRF token／同源 header；不能只靠 SameSite。餐單與 session 回應 no-store，GET 不做隱含內容修改。
 
-Python 僅接受可信 Worker 的服務請求，不能由公開入口繞過；服務驗證方式於部署定案，secret 不進瀏覽器。Worker 讀取 D1 base，向 Python 傳送已採用快照與操作意圖；Python 重新計算 canonical candidate。Worker 不接受瀏覽器自稱已驗證的 proposal 直接落庫，也不複製營養規則。Agent 上下文同樣以 Worker 取得的 base 為準。
+Python 僅接受可信 Worker 的服務請求，不能由公開入口繞過；透過專用 Tunnel／VPC binding 及不發布 host port 的容器網路隔離，secret 不進瀏覽器。Worker 讀取 D1 base，向 Python 傳送已採用快照與操作意圖；Python 重新計算 canonical candidate。Worker 不接受瀏覽器自稱已驗證的 proposal 直接落庫，也不複製營養規則。Agent 上下文同樣以 Worker 取得的 base 為準。
 
 ### 7.2 單列狀態與原子修改
 
@@ -197,8 +201,10 @@ Web／API／契約／政策版本不相容時停止新操作、提示重新載�
 |---|---|
 | K1 契約與封裝 | Python wheel 可從 repo 外 import；模組依賴符合第 4 節；OpenAPI 生成 TS client，Decimal／null／日期／版本測試一致；Web 估算與 API 目標驗證通過對應 N1–N8 |
 | K2 Agent 往返 | PydanticAI＋Workers AI 完成 tool call → 確定性計算 → tool result → typed proposal；官方 AG-UI adapter 可串流，取消／錯誤／晚到事件不產生可採用的假成功 |
-| K3 執行與保存 | Next.js 在實際 workerd／Workers 環境完成 hydration、固定上游 SSE proxy、斷線及資源量測；另驗證 Python 主機容量和入口隔離；瀏覽器通過 A13／A14、匿名身份歸屬與 D1 故障恢復 |
+| K3 執行與保存 | Oracle 原生 Next.js 經實際 Worker 入口完成 hydration；workerd／Workers 驗固定上游 SSE proxy、斷線及 CPU；另驗證 Oracle Web／Python 容量和私有入口隔離；瀏覽器通過 A13／A14、匿名身份歸屬與 D1 故障恢復 |
 | K4 品質與免費用量 | A1、A3、A5、A10 各至少 3 次 live，關鍵約束全部通過；記錄模型版本、繁中品質、token／Neuron 及延遲；模擬額度耗盡，確認無付費 fallback；免費不足則分日驗證 |
+
+K4 的繁中品質以訪客實際可見的受控提案摘要、澄清問題、失敗訊息與預覽卡片驗收；原始模型文字只留於忽略追蹤的合成案例 artifact 作診斷，不能拿它冒充產品回覆。模型只決定正式工具呼叫，已確認輸入由請求持有；`find_recipes` 給模型有來源的食譜選項，`build_proposal` 只回簡短狀態，完整 canonical 提案不再送回模型，而是由已驗事件直接送瀏覽器。工具參數失敗或模型查詢後未完成提案須有明確失敗狀態與重試；必要澄清透過受控 `clarification_required` 呈現。
 
 Worker CPU 限制只用於 Web／proxy；Python 的時間及記憶體另量測。Node build、fixture 或文件檢查都不能替代實際 runtime／live 結果。
 

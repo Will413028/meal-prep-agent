@@ -12,6 +12,7 @@ export function planningFailure(reason: string | null): string {
     no_operable_portion:"沒有符合食材最小增量的份量，請調整餐點。",
     search_budget_exhausted:"本次搜尋已達上限；不代表完全無解，可調整條件後重試。",
     not_found_within_search_limits:"本次搜尋未找到符合目標的組合，可調整餐點或目標後重試。",
+    model_no_proposal:"AI 未產生可驗證提案，既有餐單不變；可重試或調整要求。",
   };
   return messages[reason ?? ""] ?? "這份候選未通過完整檢查，請調整條件後重試。";
 }

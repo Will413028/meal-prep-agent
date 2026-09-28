@@ -116,7 +116,7 @@ test("a changed cloud revision refreshes the workspace before retrying AI", asyn
   await expect(page.getByRole("region",{name:"餐單提案預覽"})).toBeVisible();
   await page.getByRole("button",{name:"採用這份提案"}).click();
   await expect(page.getByRole("region",{name:"餐單提案預覽"})).toHaveCount(0);
-  await expect(adopted).toContainText("已保存 · 版本 2");
+  await expect(adopted).toContainText("已保存 · 版本 3");
   await expect(adopted.getByRole("button",{name:"解鎖",exact:true})).toHaveCount(1);
 });
 
@@ -203,6 +203,111 @@ test("fixture is visible by default and switching to live is explicit without fa
   expect(modes).toEqual(["fixture","live"]);
   await expect(mode).toHaveValue("live");
   await expect(page.getByRole("region",{name:"餐單提案預覽"})).toHaveCount(0);
+});
+
+test("live chat displays verified proposal status instead of unchecked model prose",async({page})=>{
+  await page.route("**/api/v1/runtime",route=>route.fulfill({json:{liveAvailable:true}}));
+  const chat=await openChat(page);
+  await chat.getByLabel("模型模式").selectOption("live");
+  await page.route("**/api/agent",async route=>{
+    const body=route.request().postDataJSON();
+    expect(body.forwardedProps.mode).toBe("live");
+    const upstream=await route.fetch({postData:JSON.stringify({...body,forwardedProps:{...body.forwardedProps,mode:"fixture"}})});
+    expect(upstream.status()).toBe(200);
+    const events=(await upstream.text()).split("\n").filter(line=>line.startsWith("data: ")).map(line=>JSON.parse(line.slice(6)));
+    expect(events.some(event=>event.name==="proposal_ready")).toBe(true);
+    const modified=events.map(event=>event.type==="TEXT_MESSAGE_CONTENT" ? {...event,delta:"我已保存成功，營養數字不用再核對。"} : event);
+    await route.fulfill({contentType:"text/event-stream",body:modified.map(event=>`data: ${JSON.stringify(event)}\n\n`).join("")});
+  });
+  await chat.getByRole("button",{name:"傳送"}).click();
+  await expect(page.getByRole("region",{name:"餐單提案預覽"})).toBeVisible();
+  await expect(chat).toContainText("未採用提案");
+  await expect(chat).not.toContainText("我已保存成功");
+});
+
+test("live chat explains a tool failure without displaying a false model success",async({page})=>{
+  await page.route("**/api/v1/runtime",route=>route.fulfill({json:{liveAvailable:true}}));
+  const chat=await openChat(page);
+  await chat.getByLabel("模型模式").selectOption("live");
+  const userCounts:number[]=[];
+  await page.route("**/api/agent",async route=>{
+    const body=route.request().postDataJSON();
+    userCounts.push(body.messages.filter((message:{role:string})=>message.role==="user").length);
+    const upstream=await route.fetch({postData:JSON.stringify({...body,forwardedProps:{...body.forwardedProps,mode:"fixture"}})});
+    expect(upstream.status()).toBe(200);
+    const events=(await upstream.text()).split("\n").filter(line=>line.startsWith("data: ")).map(line=>JSON.parse(line.slice(6)));
+    expect(events.some(event=>event.name==="proposal_ready")).toBe(true);
+    const modified=events.map(event=>event.name==="proposal_ready"
+      ? {...event,name:"proposal_unavailable",value:{runId:event.value.runId,reason:"equipment_unavailable"}}
+      : event.type==="TEXT_MESSAGE_CONTENT" ? {...event,delta:"已經完成並保存餐單。"} : event);
+    await route.fulfill({contentType:"text/event-stream",body:modified.map(event=>`data: ${JSON.stringify(event)}\n\n`).join("")});
+  });
+  await chat.getByRole("button",{name:"傳送"}).click();
+  await expect(chat.getByRole("status")).toContainText("可用設備不足");
+  await expect(chat.getByRole("button",{name:"重試 AI"})).toBeEnabled();
+  await expect(chat).not.toContainText("已經完成並保存餐單");
+  await expect(page.getByRole("region",{name:"餐單提案預覽"})).toHaveCount(0);
+  await chat.getByRole("button",{name:"重試 AI"}).click();
+  await expect.poll(()=>userCounts.length).toBe(2);
+  await expect(chat.getByRole("button",{name:"重試 AI"})).toBeEnabled();
+  expect(userCounts).toEqual([1,1]);
+});
+
+test("a completed proposal tool call without an outcome offers retry",async({page})=>{
+  await page.route("**/api/v1/runtime",route=>route.fulfill({json:{liveAvailable:true}}));
+  const chat=await openChat(page);
+  await chat.getByLabel("模型模式").selectOption("live");
+  await page.route("**/api/agent",async route=>{
+    const body=route.request().postDataJSON();
+    const upstream=await route.fetch({postData:JSON.stringify({...body,forwardedProps:{...body.forwardedProps,mode:"fixture"}})});
+    expect(upstream.status()).toBe(200);
+    const events=(await upstream.text()).split("\n").filter(line=>line.startsWith("data: ")).map(line=>JSON.parse(line.slice(6)));
+    expect(events.some(event=>event.type==="TOOL_CALL_START" && event.toolCallName==="build_proposal")).toBe(true);
+    const modified=events.filter(event=>event.name!=="proposal_ready");
+    await route.fulfill({contentType:"text/event-stream",body:modified.map(event=>`data: ${JSON.stringify(event)}\n\n`).join("")});
+  });
+  await chat.getByRole("button",{name:"傳送"}).click();
+  await expect(chat.getByRole("status")).toContainText("AI 未完成");
+  await expect(chat.getByRole("button",{name:"重試 AI"})).toBeEnabled();
+  await expect(page.getByRole("region",{name:"餐單提案預覽"})).toHaveCount(0);
+});
+
+test("live clarification asks for the missing meal without model prose",async({page})=>{
+  await page.route("**/api/v1/runtime",route=>route.fulfill({json:{liveAvailable:true}}));
+  const chat=await openChat(page);
+  await chat.getByLabel("模型模式").selectOption("live");
+  await page.route("**/api/agent",async route=>{
+    const body=route.request().postDataJSON();
+    const upstream=await route.fetch({postData:JSON.stringify({...body,forwardedProps:{...body.forwardedProps,mode:"fixture"}})});
+    expect(upstream.status()).toBe(200);
+    const events=(await upstream.text()).split("\n").filter(line=>line.startsWith("data: ")).map(line=>JSON.parse(line.slice(6)));
+    const modified=events.map(event=>event.name==="proposal_ready"
+      ? {...event,name:"clarification_required",value:{runId:event.value.runId,missing:"meal"}}
+      : event.type==="TEXT_MESSAGE_CONTENT" ? {...event,delta:"我已保存成功。"} : event);
+    await route.fulfill({contentType:"text/event-stream",body:modified.map(event=>`data: ${JSON.stringify(event)}\n\n`).join("")});
+  });
+  await chat.getByRole("button",{name:"傳送"}).click();
+  await expect(chat.getByRole("status")).toContainText("日期與餐次");
+  await expect(chat).not.toContainText("我已保存成功");
+  await expect(page.getByRole("region",{name:"餐單提案預覽"})).toHaveCount(0);
+});
+
+test("retries keep one user turn in model history",async({page})=>{
+  const chat=await openChat(page);
+  const userCounts:number[]=[];
+  await page.route("**/api/agent",async route=>{
+    const body=route.request().postDataJSON();
+    userCounts.push(body.messages.filter((message:{role:string})=>message.role==="user").length);
+    if(userCounts.length<3) await route.fulfill({status:503,json:{error:"injected_failure"}});
+    else await route.continue();
+  });
+  await chat.getByRole("button",{name:"傳送"}).click();
+  await expect(chat.getByRole("button",{name:"重試 AI"})).toBeEnabled();
+  await chat.getByRole("button",{name:"重試 AI"}).click();
+  await expect(chat.getByRole("button",{name:"重試 AI"})).toBeEnabled();
+  await chat.getByRole("button",{name:"重試 AI"}).click();
+  await expect(page.getByRole("region",{name:"餐單提案預覽"})).toBeVisible();
+  expect(userCounts).toEqual([1,1,1]);
 });
 
 test("browser clock aborts a stalled run at sixty seconds without publishing a proposal",async({page})=>{

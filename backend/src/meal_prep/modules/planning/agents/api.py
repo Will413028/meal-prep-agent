@@ -1,7 +1,7 @@
 import asyncio
 import json
 import math
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from decimal import Decimal
 from time import monotonic
 from typing import Any
@@ -14,8 +14,10 @@ from pydantic_ai import AgentRunResult
 from pydantic_ai.messages import ToolCallPart
 from pydantic_ai.usage import UsageLimits
 
+from meal_prep.platform.sse import with_heartbeat
+
 from ..contracts import BuildProposalRequest
-from .fixture import fixture_model
+from .fixture import fixture_choice, fixture_model
 from .runtime import PlanningRun, planning_agent
 from .transport import PlanningAdapter
 
@@ -74,9 +76,10 @@ async def run(request: Request) -> Response:
     except (ValueError, TypeError, AttributeError, ValidationError):
         return JSONResponse({"error": "invalid_agent_request"}, status_code=422)
     mode = incoming.forwarded_props.get("mode", "fixture")
+    fixture = fixture_choice(planning) if mode == "fixture" else None
     model = (
-        fixture_model()
-        if mode == "fixture"
+        fixture_model(fixture.replacement)
+        if fixture is not None
         else getattr(request.app.state, "planning_model", None)
     )
     if model is None:
@@ -91,7 +94,10 @@ async def run(request: Request) -> Response:
                 "cache-control": "no-store",
             },
         )
-    deps = PlanningRun(planning)
+    deps = PlanningRun(
+        planning,
+        fixture_unavailable_reason=fixture.unavailable_reason if fixture else None,
+    )
     adapter = PlanningAdapter(agent=planning_agent(model), run_input=incoming)
 
     async def complete(result: AgentRunResult[Any]) -> AsyncIterator[CustomEvent]:
@@ -109,13 +115,44 @@ async def run(request: Request) -> Response:
             },
         )
         calls = [
-            part.tool_call_id
+            (part.tool_name, part.tool_call_id)
             for message in result.new_messages()
             for part in message.parts
-            if isinstance(part, ToolCallPart) and part.tool_name == "build_proposal"
+            if isinstance(part, ToolCallPart)
         ]
         outcome = deps.result
-        if not calls or calls[-1] != deps.completed_tool_call or outcome is None:
+        if not calls:
+            yield CustomEvent(
+                name="proposal_unavailable",
+                value={"runId": incoming.run_id, "reason": "model_no_proposal"},
+            )
+            return
+        if calls[-1][1] != deps.completed_tool_call or calls[-1][0] not in {
+            "build_proposal",
+            "ask_clarification",
+        }:
+            yield CustomEvent(
+                name="proposal_unavailable",
+                value={"runId": incoming.run_id, "reason": "model_no_proposal"},
+            )
+            return
+        if calls[-1][0] == "ask_clarification":
+            if deps.clarification is not None:
+                yield CustomEvent(
+                    name="clarification_required",
+                    value={"runId": incoming.run_id, "missing": deps.clarification},
+                )
+            else:
+                yield CustomEvent(
+                    name="proposal_unavailable",
+                    value={"runId": incoming.run_id, "reason": "model_no_proposal"},
+                )
+            return
+        if outcome is None:
+            yield CustomEvent(
+                name="proposal_unavailable",
+                value={"runId": incoming.run_id, "reason": "model_no_proposal"},
+            )
             return
         if outcome.status == "ready" and outcome.proposal is not None:
             yield CustomEvent(
@@ -134,7 +171,7 @@ async def run(request: Request) -> Response:
                 },
             )
 
-    async def bounded_run() -> AsyncIterator[BaseEvent]:
+    async def bounded_run() -> AsyncGenerator[BaseEvent]:
         try:
             async with asyncio.timeout(RUN_TIMEOUT_SECONDS):
                 async for event in adapter.run_stream(
@@ -158,4 +195,7 @@ async def run(request: Request) -> Response:
         except TimeoutError:
             yield RunErrorEvent(message="run_timeout", code="run_timeout")
 
-    return adapter.streaming_response(bounded_run())
+    events = bounded_run()
+    return with_heartbeat(
+        adapter.streaming_response(events), close_source=events.aclose
+    )
