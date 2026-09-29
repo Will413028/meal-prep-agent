@@ -157,7 +157,7 @@
 |---|---|---|
 | 起始目標估算 | Mifflin–St Jeor 需另選活動係數；DRI 2023 有完整成人活動分級公式；動態模型需要長期追蹤 | 採 DRI 2023 EER 起始估算，減脂 −10%／增肌 +5% 為產品提案預設，另行確認；公式、蛋白質規則與獨立核算見 [營養政策](nutrition-policy.md) |
 | 數值與適用政策 | 自由填寫彈性高；版本化的適用域與驗證可讓兩入口行為一致 | `nutrition-v1` 已列公式／單位、支援範圍、容許差、缺值及 N1–N8 驗收；開放真實輸入前須完成實作驗證 |
-| 計畫保存 | 分頁記憶體最簡單但無關頁恢復；Oracle SQLite＋匿名 Cookie 免登入但需自管備份；登入帳號支援跨裝置但增加管理 | 已確認 Oracle SQLite＋匿名識別 Cookie，保存已採用計畫與前一版、30 天未修改失效；不使用 IndexedDB。見第 10.2 節 |
+| 計畫保存 | 分頁記憶體最簡單但無關頁恢復；Oracle SQLite＋匿名 Cookie 免登入，主機故障復原需自管備份；登入帳號支援跨裝置但增加管理 | 已確認 Oracle SQLite＋匿名識別 Cookie，保存已採用計畫與前一版、30 天未修改失效；本版不排程備份，不使用 IndexedDB。見第 10.2 節 |
 | 免費模型 | 本機模型免 API 費但需要常駐硬體；雲端免費額度適合公開展示但有用量限制；付費 API 可擴充但不符合本次預算 | 固定 Workers AI `@cf/zai-org/glm-4.7-flash`，只用免費額度；正式工具與 AG-UI 已驗，日用量仍受帳戶共用額度約束 |
 | UI 與部署 | 全 TypeScript 可統一語言；Next.js＋Python API 增加跨語言契約，但能集中 Python 業務規則並沿用參考專案結構 | 已選 Next.js＋FastAPI／PydanticAI＋AG-UI，單一 repo、Modular Monolith；Workers 提供公開入口／限流／proxy，Next.js 保存與 Python 計算分別部署於 Oracle 專用容器。詳細責任與取捨見 [技術架構](architecture.md) |
 

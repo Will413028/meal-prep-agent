@@ -4,7 +4,7 @@
 
 ## 目前狀態
 
-MVP 已按 T00–T12 完成實作與驗收，只用免費模型額度。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 定義模組與資料流。Oracle 原生 Web／API、Cloudflare 公開入口與 SQLite 保存已部署；舊 D1 資料保留供回復，正式 Worker 不再使用 D1。真模型矩陣、正式瀏覽器、Free CPU 取樣及遠端 CI 證據見 [實作計畫](implementation-plan.md)。
+MVP 已按 T00–T12 完成實作與驗收，只用免費模型額度。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 定義模組與資料流。Oracle 原生 Web／API、Cloudflare 公開入口與 SQLite 保存已部署；D1 回復窗口已關閉，舊資料保留但不作正式回切。真模型矩陣、正式瀏覽器、Free CPU 取樣及遠端 CI 證據見 [實作計畫](implementation-plan.md)。
 
 ## MVP 範圍
 
@@ -50,7 +50,7 @@ uv run --project backend --frozen ruff check --config backend/pyproject.toml bac
 啟動 Web：先建立專用本機資料目錄，以 `python3 scripts/session-db.py init <絕對路徑>/plan.sqlite3` 明確建立空庫，再設定 `MEAL_DB_PATH` 為該檔案絕對路徑、`MEAL_PUBLIC_ORIGIN=http://127.0.0.1:14317` 及 `MEAL_API_ORIGIN=http://127.0.0.1:14318`，執行 `pnpm --filter @meal-prep/web dev --hostname 127.0.0.1 --port 14317`；資料目錄不可放在 Git 追蹤範圍。正式 Web 只開啟既有且版本正確的資料庫，缺檔不會建立空庫；`pnpm test:e2e` 會自行建立 ignored 測試資料檔。
 `pnpm test:e2e` 自行啟停兩個測試服務，請先停止相同埠的手動服務。目標確認與未採用提案只在分頁記憶體；明確採用後才保存至 SQLite。
 
-Cloudflare 本機驗證：`pnpm --filter @meal-prep/web build:worker`，接著 `MEAL_TEST_WORKER=1 pnpm test:e2e`；以原生 Next standalone 搭配 workerd 執行瀏覽器案例，SQLite 測試資料位於 ignored `.artifacts/e2e/`。Node Next dev 也提供保存 routes；正式公開入口仍需 workerd／Worker 限流與代理。`pnpm --filter @meal-prep/web test:d1` 僅保留 T03 歷史 ephemeral D1 probe，不是現行保存驗收。
+Cloudflare 本機驗證：`pnpm --filter @meal-prep/web build:worker`，接著 `MEAL_TEST_WORKER=1 pnpm test:e2e`；以原生 Next standalone 搭配 workerd 執行瀏覽器案例，SQLite 測試資料位於 ignored `.artifacts/e2e/`。Node Next dev 也提供保存 routes；正式公開入口仍需 workerd／Worker 限流與代理。
 
 開發連線診斷頁位於 `/diagnostics/transport`，走 `/api/diagnostics/agent` → Python `/diagnostics/agent`，診斷結果不可採用。正式聊天以官方 HttpAgent 呼叫 Worker `/api/agent`；Oracle Web 驗身份與 revision、注入 SQLite 已採用快照，再轉送固定 Python `/agent`。瀏覽器測試以明確的 `create_synthetic_probe_app` 配置合成模型，仍走正式 tools。
 
@@ -64,7 +64,7 @@ Cloudflare 本機驗證：`pnpm --filter @meal-prep/web build:worker`，接著 `
 PYDANTIC_AI_NO_BANNER=1 uv run --env-file .env.cloudflare.local --project backend --frozen python scripts/live-acceptance.py A1 --trial 12
 ```
 
-腳本只送合成目標、食譜及外食資料，檢查正式工具、來源、canonical 提案或明確不可用原因；原始串流和結構化結果寫入 ignored `.artifacts/t12-live-<案例>-<編號>.events/.json`，其中可能包含完整合成對話，請勿提交。`run_usage` 的 input／output tokens 可依當時[模型費率](https://developers.cloudflare.com/workers-ai/platform/pricing/)估算 Neurons；估值不是 Cloudflare 帳戶實際扣量。A10 預期為設備不足且沒有可採用提案。若觸及每日免費額度，等額度重置後重跑，不自動改用付費服務或展示模式。公開入口、SQLite 備份與回復演練見 [部署手冊](deploy/README.md)；逐案證據與已知限制見 [實作計畫](implementation-plan.md)。
+腳本只送合成目標、食譜及外食資料，檢查正式工具、來源、canonical 提案或明確不可用原因；原始串流和結構化結果寫入 ignored `.artifacts/t12-live-<案例>-<編號>.events/.json`，其中可能包含完整合成對話，請勿提交。`run_usage` 的 input／output tokens 可依當時[模型費率](https://developers.cloudflare.com/workers-ai/platform/pricing/)估算 Neurons；估值不是 Cloudflare 帳戶實際扣量。A10 預期為設備不足且沒有可採用提案。若觸及每日免費額度，等額度重置後重跑，不自動改用付費服務或展示模式。公開入口與 SQLite 運維見 [部署手冊](deploy/README.md)；逐案證據與已知限制見 [實作計畫](implementation-plan.md)。
 
 部署後可用真瀏覽器補驗 live 模式與九餐預覽；只用合成目標，寫入 ignored `.artifacts/t12-live-browser-<編號>.json`，不會採用餐單。編號也須未使用：
 
@@ -72,6 +72,6 @@ PYDANTIC_AI_NO_BANNER=1 uv run --env-file .env.cloudflare.local --project backen
 MEAL_DEPLOYED_ORIGIN=https://<正式 HTTPS 入口> node scripts/live-browser-acceptance.mjs 1
 ```
 
-保存端點由 `apps/web/src/app/api/` 的 Oracle Web route 提供，Worker 僅代理明列路徑；公開 DTO 從 Python schema-only router 生成，該 router 不掛在 Python runtime。`wrangler.jsonc` 不綁定 D1，production 使用兩個 VPC binding；舊 D1 schema 與資料保留供回復，部署流程見 [deploy/README.md](deploy/README.md)。舊測試快照若缺逐餐營養或目標差距欄位，會保留原列並回報格式不相容；使用者須明確選擇「開始新規劃」，不自動遷移或刪除。
+保存端點由 `apps/web/src/app/api/` 的 Oracle Web route 提供，Worker 僅代理明列路徑；公開 DTO 從 Python schema-only router 生成，該 router 不掛在 Python runtime。`wrangler.jsonc` 不綁定 D1，production 使用兩個 VPC binding；舊 D1 資料仍保留但不再作回復來源。沒有排程備份，詳 [部署手冊](deploy/README.md)。舊測試快照若缺逐餐營養或目標差距欄位，會保留原列並回報格式不相容；使用者須明確選擇「開始新規劃」，不自動遷移或刪除。
 
 契約 validator 在生成階段以 Ajv standalone＋固定 esbuild bundle 為 ESM，Worker 不執行 Ajv 動態編譯。雙 runtime 切換後 `typecheck` 會先 `next typegen` 更新生成型別。開發前請讀 [AGENTS.md](AGENTS.md)。

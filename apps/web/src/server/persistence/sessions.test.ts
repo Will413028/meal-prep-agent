@@ -1,46 +1,47 @@
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { Miniflare } from "miniflare";
-import type { D1Database } from "@cloudflare/workers-types";
-import { commitSession, createSession, deleteSession, expireSessions, readSession, sessionLifetime } from "./sessions";
+import { commitSession, createSession, deleteSession, expireSessions, readSession, sessionLifetime, type SessionStore } from "./sessions";
 import { sessionHttp, type ProposalValidator, type ProposalBuilder } from "./http";
 import synthetic from "../../../tests/fixtures/synthetic-evaluation.json";
 import { validateEvaluation } from "../../shared/api/validate";
 import { validateSession } from "../../shared/api/persistence";
 import { pythonBuilder, pythonValidator } from "./python-validator";
-import { D1SessionStore } from "./d1-store";
+import { SQLiteSessionStore } from "./sqlite-store";
 
-let worker: Miniflare;
-let db: D1Database;
-let store: D1SessionStore;
+let directory: string;
+let db: DatabaseSync;
+let store: SQLiteSessionStore;
 const now = Date.UTC(2026, 9, 1);
 
 beforeAll(async () => {
-  worker = new Miniflare({ telemetry: { enabled: false }, workers: [{ config: {
-    name: "meal-prep-session-test", compatibilityDate: "2026-09-28",
-    manifest: { mainModule: "worker.mjs", modules: { "worker.mjs": { type: "esm", contents: "export default {fetch(){return new Response('synthetic local D1 test')}}" } } },
-    env: { DB: { type: "d1", id: "meal-prep-session-test" } },
-  } }] });
-  db = await worker.getD1Database("DB");
-  // T03's only prior schema was an isolated probe, not product persistence.
-  await db.prepare("CREATE TABLE probe (id INTEGER PRIMARY KEY, marker TEXT NOT NULL)").run();
-  await db.prepare("INSERT INTO probe (id,marker) VALUES (?,?)").bind(1,"synthetic").run();
+  directory = await mkdtemp(join(tmpdir(),"meal-prep-session-http-"));
+  const path = join(directory,"plan.sqlite3");
+  db = new DatabaseSync(path);
   const migration = await readFile(new URL("../../../../../deploy/migrations/0001_plan_sessions.sql", import.meta.url), "utf8");
-  await db.batch(migration.split(";").map(sql => sql.trim()).filter(Boolean).map(sql => db.prepare(sql)));
-  store = new D1SessionStore(db);
+  db.exec(migration);
+  db.exec("PRAGMA user_version=1");
+  store = new SQLiteSessionStore(path);
 });
-afterAll(async () => { await worker?.dispose(); });
+afterAll(async () => {
+  store?.close();
+  db?.close();
+  if (directory) await rm(directory,{recursive:true,force:true});
+});
 
-test("the first additive migration preserves the prior probe schema for application rollback", async () => {
-  expect(await db.prepare("SELECT id,marker FROM probe WHERE id=?").bind(1).first()).toEqual({id:1,marker:"synthetic"});
-  const index = await db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='plan_sessions_expiry'").first();
-  expect(index).toEqual({name:"plan_sessions_expiry"});
-  const fresh = await createSession(store,now);
-  expect(await readSession(store,fresh.token,now)).toEqual(fresh.row);
-  // Previous application versions ignore the new table; rollback retains it.
-  expect(await db.prepare("SELECT marker FROM probe WHERE id=?").bind(1).first()).toEqual({marker:"synthetic"});
-  expect(await readSession(store,fresh.token,now)).toEqual(fresh.row);
-});
+function failStore(operation: "remove" | "compareAndSwap"): SessionStore {
+  const failure = () => Promise.reject(new Error("injected storage failure"));
+  return {
+    insert: row => store.insert(row),
+    find: (tokenHash,at,planId) => store.find(tokenHash,at,planId),
+    compareAndSwap: (base,next,operationId,operationHash,at) => operation === "compareAndSwap"
+      ? failure() : store.compareAndSwap(base,next,operationId,operationHash,at),
+    remove: (base,at) => operation === "remove" ? failure() : store.remove(base,at),
+    purge: at => store.purge(at),
+  };
+}
 
 test("preview uses the cloud base without saving and rejects a caller-supplied base", async () => {
   const {headers,payload,evaluation} = await initializeHttp();
@@ -70,7 +71,7 @@ test("explicit creation stores only an opaque token hash and valid thirty-day em
   expect(session!.row.previousJson).toBeNull();
   expect(session!.row.expiresAt).toBe(now + sessionLifetime);
   expect(await readSession(store, session!.token, now)).toEqual(session!.row);
-  const stored = await db.prepare("SELECT * FROM plan_sessions WHERE planId = ?").bind(session!.row.planId).first();
+  const stored = db.prepare("SELECT * FROM plan_sessions WHERE planId = ?").get(session!.row.planId);
   expect(JSON.stringify(stored)).not.toContain(session!.token);
 });
 
@@ -86,7 +87,7 @@ test("missing random expired and another owner's plan never return a session", a
   expect((await readSession(store, a!.token, now + 1000))!.expiresAt).toBe(now + sessionLifetime);
 });
 
-test("the real D1 CAS accepts exactly one concurrent revision and returns its atomic snapshot", async () => {
+test("SQLite CAS accepts exactly one concurrent revision and returns its atomic snapshot", async () => {
   const { token, row } = await createSession(store, now);
   const results = await Promise.all([
     commitSession(store, row, {currentJson: '{"synthetic":"A"}', previousJson: null}, crypto.randomUUID(), "hash-a", now+1),
@@ -119,7 +120,7 @@ test("clear and expiry cleanup cannot be undone by a late first proposal", async
   const expired = await createSession(store, now);
   expect(await readSession(store, expired.token, now+sessionLifetime)).toBeNull();
   expect(await expireSessions(store, now+sessionLifetime)).toBeGreaterThan(0);
-  expect(await db.prepare("SELECT * FROM plan_sessions WHERE tokenHash=?").bind(expired.row.tokenHash).first()).toBeNull();
+  expect(db.prepare("SELECT * FROM plan_sessions WHERE tokenHash=?").get(expired.row.tokenHash)).toBeUndefined();
   expect(await commitSession(store, expired.row, {currentJson:'{}',previousJson:null}, crypto.randomUUID(), "hash", now+sessionLifetime)).toBeNull();
 });
 
@@ -207,7 +208,7 @@ test("adoption validates from the stored base, commits once, and rejects a reuse
   expect((await sessionHttp(request(),store,()=>now+2000,validator)).status).toBe(409);
 });
 
-test("checks and one-level undo use Worker state without calling Python", async () => {
+test("checks and one-level undo use saved state without calling Python", async () => {
   const {headers,payload,evaluation} = await initializeHttp();
   const validator: ProposalValidator = async input => ({...input.context,evaluation,diff:[],shoppingDiff:[],prepDiff:[],violations:[]});
   const send = (body: unknown, validate?: ProposalValidator) => sessionHttp(new Request("https://meal.test/api/plan/actions",{method:"POST",headers,body:JSON.stringify(body)}),store,()=>now+1000,validate);
@@ -280,8 +281,7 @@ test("clear requires CSRF and reports storage failure without clearing the brows
   const headers = {origin:"https://meal.test","content-type":"application/json","x-meal-client":"1",cookie};
   const rejected = await sessionHttp(new Request("https://meal.test/api/session",{method:"DELETE",headers}),store,()=>now);
   expect(rejected.status).toBe(403);
-  const failingDb = new D1SessionStore({prepare(){throw new Error("injected D1 failure")}} as unknown as D1Database);
-  const failed = await sessionHttp(new Request("https://meal.test/api/session",{method:"DELETE",headers:{...headers,"x-meal-csrf":state.csrfToken}}),failingDb,()=>now);
+  const failed = await sessionHttp(new Request("https://meal.test/api/session",{method:"DELETE",headers:{...headers,"x-meal-csrf":state.csrfToken}}),failStore("remove"),()=>now);
   expect(failed.status).toBe(503);
   expect(failed.headers.has("set-cookie")).toBe(false);
   const cleared = await sessionHttp(new Request("https://meal.test/api/session",{method:"DELETE",headers:{...headers,"x-meal-csrf":state.csrfToken}}),store,()=>now);
@@ -293,14 +293,14 @@ test("clear requires CSRF and reports storage failure without clearing the brows
 
 test("unknown stored versions are rejected without deleting the cloud row", async () => {
   const {token,row} = await createSession(store,now);
-  await db.prepare("UPDATE plan_sessions SET schemaVersion=99 WHERE tokenHash=?").bind(row.tokenHash).run();
+  db.prepare("UPDATE plan_sessions SET schemaVersion=99 WHERE tokenHash=?").run(row.tokenHash);
   const result = await sessionHttp(new Request("https://meal.test/api/plan",{headers:{cookie:`__Host-meal_session=${token}`}}),store,()=>now);
   expect(result.status).toBe(409);
   expect(result.headers.has("set-cookie")).toBe(false);
-  expect((await db.prepare("SELECT schemaVersion FROM plan_sessions WHERE tokenHash=?").bind(row.tokenHash).first<{schemaVersion:number}>())!.schemaVersion).toBe(99);
+  expect((db.prepare("SELECT schemaVersion FROM plan_sessions WHERE tokenHash=?").get(row.tokenHash) as {schemaVersion:number}).schemaVersion).toBe(99);
 });
 
-test("Worker rejects numeric lexemes that would silently round before Python validation", async () => {
+test("Web rejects numeric lexemes that would silently round before Python validation", async () => {
   const {headers,payload,evaluation} = await initializeHttp();
   const validator: ProposalValidator = async input => ({...input.context,evaluation,diff:[],shoppingDiff:[],prepDiff:[],violations:[]});
   const raw = JSON.stringify(payload).replace('"baseRevision":0','"baseRevision":0.00000000000000000000000000000000000000001e-999');
@@ -308,12 +308,11 @@ test("Worker rejects numeric lexemes that would silently round before Python val
   expect(result.status).toBe(400);
 });
 
-test("a D1 failure at the final update preserves the prior row and returns no renewal cookie", async () => {
+test("a storage failure at the final update preserves the prior row and returns no renewal cookie", async () => {
   const {headers,payload,evaluation} = await initializeHttp();
   let calculated = false;
   const validator: ProposalValidator = async input => { calculated = true; return {...input.context,evaluation,diff:[],shoppingDiff:[],prepDiff:[],violations:[]}; };
-  const broken = new D1SessionStore({prepare(sql: string) { if (sql.startsWith("UPDATE")) throw new Error("injected write failure"); return db.prepare(sql); }} as unknown as D1Database);
-  const response = await sessionHttp(new Request("https://meal.test/api/plan/actions",{method:"POST",headers,body:JSON.stringify(payload)}),broken,()=>now,validator);
+  const response = await sessionHttp(new Request("https://meal.test/api/plan/actions",{method:"POST",headers,body:JSON.stringify(payload)}),failStore("compareAndSwap"),()=>now,validator);
   expect(calculated).toBe(true);
   expect(response.status).toBe(503);
   expect(response.headers.has("set-cookie")).toBe(false);
@@ -326,7 +325,7 @@ test("expiry during Python calculation rejects the late write before scheduled c
   const validator: ProposalValidator = async input => { clock += sessionLifetime; return {...input.context,evaluation,diff:[],shoppingDiff:[],prepDiff:[],violations:[]}; };
   const response = await sessionHttp(new Request("https://meal.test/api/plan/actions",{method:"POST",headers,body:JSON.stringify(payload)}),store,()=>clock,validator);
   expect(response.status).toBe(409);
-  expect((await db.prepare("SELECT revision FROM plan_sessions WHERE planId=?").bind(payload.planId).first<{revision:number}>())?.revision).toBe(0);
+  expect((db.prepare("SELECT revision FROM plan_sessions WHERE planId=?").get(payload.planId) as {revision:number})?.revision).toBe(0);
 });
 
 test("an unchanged candidate must still reject a concurrent modification clear or expiry", async () => {
@@ -348,14 +347,14 @@ test("an unchanged candidate must still reject a concurrent modification clear o
   }
 });
 
-test("old nutrition snapshots remain in D1 after rejection and explicit new identity", async () => {
+test("old nutrition snapshots remain in SQLite after rejection and explicit new identity", async () => {
   for (const missing of ["mealNutrition","targetDifference"]) {
     const {token,row} = await createSession(store,now);
     const old = JSON.parse(JSON.stringify(synthetic));
     if (missing === "mealNutrition") delete old.mealNutrition;
     else delete old.days[0].nutrients.kcal.targetDifference;
     const original = JSON.stringify(old);
-    await db.prepare("UPDATE plan_sessions SET currentJson=? WHERE tokenHash=?").bind(original,row.tokenHash).run();
+    db.prepare("UPDATE plan_sessions SET currentJson=? WHERE tokenHash=?").run(original,row.tokenHash);
     const cookie = `__Host-meal_session=${token}`;
     const rejected = await sessionHttp(new Request("https://meal.test/api/plan",{headers:{cookie}}),store,()=>now);
     expect(rejected.status).toBe(409);
@@ -367,7 +366,7 @@ test("old nutrition snapshots remain in D1 after rejection and explicit new iden
   }
 });
 
-test("Agent proxy replaces caller context with the owned D1 base and strips cookies", async () => {
+test("Agent proxy replaces caller context with the owned SQLite base and strips cookies", async () => {
   const {headers,payload,evaluation} = await initializeHttp();
   const validator: ProposalValidator = async input => ({...input.context,evaluation,diff:[],shoppingDiff:[],prepDiff:[],violations:[]});
   await sessionHttp(new Request("https://meal.test/api/plan/actions",{method:"POST",headers,body:JSON.stringify(payload)}),store,()=>now,validator);
@@ -388,7 +387,7 @@ test("Agent proxy replaces caller context with the owned D1 base and strips cook
 
 test("session creation accepts the byte boundary but rejects oversized bodies before creating a row", async () => {
   const headers = {origin:"https://meal.test","content-type":"application/json","x-meal-client":"1"};
-  const count = async () => (await db.prepare("SELECT COUNT(*) AS n FROM plan_sessions").first<{n:number}>())!.n;
+  const count = () => (db.prepare("SELECT COUNT(*) AS n FROM plan_sessions").get() as {n:number}).n;
   const before = await count();
   for (const extra of [0,1]) {
     const response = await sessionHttp(new Request("https://meal.test/api/session",{method:"POST",headers,body:'{"schemaVersion":1}'.padEnd(128*1024+extra," ")}),store,()=>now);
@@ -417,6 +416,6 @@ test("two anonymous Agent runs receive only their owned snapshot and reject ques
   const raw={...requests[0],forwardedProps:{...requests[0].forwardedProps,planning:{...requests[0].forwardedProps.planning,age:37,height:171.3,weight:68.7}}};
   expect((await send(0,raw)).status).toBe(400);
   expect(Object.keys(contexts)).toHaveLength(2);
-  const stored=await db.prepare("SELECT currentJson,previousJson FROM plan_sessions WHERE planId=?").bind(requests[0].threadId).first();
+  const stored=db.prepare("SELECT currentJson,previousJson FROM plan_sessions WHERE planId=?").get(requests[0].threadId);
   expect(JSON.stringify(stored)).not.toMatch(/"(?:age|height|weight)"/);
 });

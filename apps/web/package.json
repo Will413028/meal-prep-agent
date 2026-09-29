@@ -9,7 +9,6 @@
     "test": "vitest run",
     "typecheck": "next typegen && tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:d1": "node scripts/d1-probe.mjs",
     "dev:worker": "wrangler dev --config wrangler.jsonc --ip 127.0.0.1 --port 14317 --var MEAL_API_ORIGIN:http://127.0.0.1:14318 --var MEAL_WEB_ORIGIN:http://127.0.0.1:14319",
     "build:worker": "wrangler deploy --config wrangler.jsonc --dry-run --outdir ../../.artifacts/worker",
     "deploy:worker": "wrangler deploy --config wrangler.jsonc --env production"
@@ -31,7 +30,6 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "esbuild": "0.28.1",
-    "miniflare": "5.20260925.0-alpha",
     "openapi-typescript": "7.13.0",
     "typescript": "~5.9.3",
     "vite": "8.3.1",

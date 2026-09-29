@@ -13,7 +13,7 @@
 | 語言與框架 | 全 TypeScript 可共用語言，但原 ADK／Workers 方案需驗證自訂橋接；Python API 可集中模型與業務規則，但增加跨語言契約及部署服務 | Next.js＋FastAPI／PydanticAI；取代先前 ADK TypeScript 草案，並非已執行程式遷移 |
 | 模組 | 全域技術分層容易跨功能耦合；Modular Monolith 保留業務邊界且可單體部署；微服務增加協調成本 | 單一 repo，Python 依業務模組組織 |
 | 執行生命週期 | Request 範圍簡單；Temporal 適合跨請求、長時間、可恢復工作，但需要持久化及運維 | 先做 request 範圍的 Agent run；Temporal 留待需求成立後另議 |
-| 計畫保存 | 分頁記憶體無重開恢復；瀏覽器保存限本機；Oracle SQLite＋匿名 Cookie 免登入且可重開恢復，但需自行備份；PostgreSQL 易於多服務擴充但增加維運；受管資料庫省維運但改變自有資料落點 | Oracle Web 專用 SQLite volume＋匿名 Cookie，取代 D1 與 IndexedDB；一階復原、30 天未修改到期，不加入登入或跨裝置找回 |
+| 計畫保存 | 分頁記憶體無重開恢復；瀏覽器保存限本機；Oracle SQLite＋匿名 Cookie 免登入且可重開恢復，主機故障復原需自行備份；PostgreSQL 易於多服務擴充但增加維運；受管資料庫省維運但改變自有資料落點 | Oracle Web 專用 SQLite volume＋匿名 Cookie，取代 D1 與 IndexedDB；一階復原、30 天未修改到期，本版不排程備份，不加入登入或跨裝置找回 |
 | 計算責任 | 全放後端便於集中規則，但上傳身體問卷會改變已確認的資料邊界 | 餐單計算與驗證在 Python；身體問卷的起始估算維持瀏覽器內進行 |
 
 維持三天餐單、雙目標入口、自煮＋固定外食與免費模型限制。參考專案的 Temporal、資料庫、登入、主機資源及付費預算不隨技術選型一起引入。
@@ -102,7 +102,7 @@ contracts/                     # 生成 OpenAPI／公開保存 schema
 data/                        # 版本化合成資料及政策資料
 tests/e2e/
 deploy/
-  migrations/                  # 舊 D1 schema，保留遷移／回復對照
+  migrations/                  # 現行 SQLite schema，供明確初始化與測試使用
   data/                        # Oracle 主機專用 SQLite volume，不進 Git
 ```
 
@@ -173,19 +173,19 @@ Python 計算在寫入前完成。Web 用單一 prepared `UPDATE ... WHERE token
 
 復原以 previous 建新 revision、清空 previous；鎖定與勾選也走條件寫入。相同 operationId＋payload hash 的重試，只有確認已提交該操作才回已完成；同 id 不同 payload 拒絕。若期間已有後續修改則要求重新讀取，不重新套用舊操作。多頁通知只改善畫面，真正防覆寫由 SQLite CAS 決定。第一版只有 Oracle 單一寫入主機，不做複本。
 
-切換時先停寫，從 D1 匯出既有資料到受限檔案，以 `scripts/session-db.py` 對列數與逐列摘要做對帳；D1 舊表與舊 Worker artifact 保留作回復來源。切換後每日 SQLite backup 與回復步驟見部署手冊；資料庫或 schema 不相容時拒絕新操作，不覆寫舊列。
+2026-09-29 切換時先停寫並逐列對帳 D1 與 SQLite；歷史證據見實作計畫。D1 回復窗口現已關閉，沒有排程備份；資料庫或 schema 不相容時拒絕新操作，不覆寫舊列。
 
 ### 7.3 API、期限、清除及故障
 
 Worker 公開入口只轉送明列路徑：`POST /api/session` 建立匿名身份；`GET /api/plan` 讀取；`POST /api/plan/actions` 以明確 action（adopt／portion／locks／checks／undo）、baseRevision、operationId 執行；`DELETE /api/session` 清除。實際保存邏輯在 Oracle Web；Python evaluate／validate 與 `/agent` 只經固定內網路徑使用，不開放任意 upstream。刪除會使身份失效，任何舊 run／請求不得重建 session。
 
-保存目前與前一版，身體問卷、聊天、未採用提案不落 SQLite。維持 30 天未修改到期，只有成功內容修改續期；Cookie 期限跟隨服務端 expiresAt，查看不續期。所有讀寫先驗期限；Web 每日清理過期列，即使清理延遲也無法讀取或修改過期內容。Cookie 遺失不代表伺服器立即刪除，資料依期限清理；刪除不承諾既有備份立即清除。
+保存目前與前一版，身體問卷、聊天、未採用提案不落 SQLite。維持 30 天未修改到期，只有成功內容修改續期；Cookie 期限跟隨服務端 expiresAt，查看不續期。所有讀寫先驗期限；Web 每日清理過期列，即使清理延遲也無法讀取或修改過期內容。Cookie 遺失不代表伺服器立即刪除，資料依期限清理；歷史備份檔未隨清除操作刪除。
 
 清除先在本頁撤銷 run，伺服器刪除該身份列後才顯示雲端已清除並移除 Cookie；失敗提供重試，不冒稱已刪。與更新競爭時，以資料庫完成順序為準，刪除後舊 token 沒有可更新列。新 session 使用新 token／generation，不復用舊身份。請求結果不明時先讀回，避免顯示不實成功或失敗。
 
 瀏覽器只保留當次頁面記憶體；SQLite／保存 API 不可用時，已載入餐單可唯讀檢視，採用、復原及勾選都不得冒稱已保存，不另加入本機持久化 fallback。重新開頁需 Oracle 保存服務可用才能恢復。模型額度耗盡不影響 SQLite 讀寫或純計算；Python 不可用時，讀取及不需配餐計算的勾選／復原可由 Web 處理。未知 schema 不靜默改寫或刪除。
 
-匿名 session 建立頻率仍由 Worker Rate Limiting 綁定限制，SQLite 的容量與備份由 Oracle 主機承擔；儲存故障與模型額度故障分開呈現，不自動升級付費。
+匿名 session 建立頻率仍由 Worker Rate Limiting 綁定限制，SQLite 的容量由 Oracle 主機承擔；儲存故障與模型額度故障分開呈現，不自動升級付費。
 
 ## 8. 限額與運行邊界
 

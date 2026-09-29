@@ -29,7 +29,7 @@
 | API／契約 | pytest 經 FastAPI 入口、生成 TS client、runtime schema round-trip | 驗 HTTP 序列化、null／number、錯誤與版本；不能只測 DTO 建構 |
 | Agent | 可控模型替身驅動真 PydanticAI／官方 AG-UI adapter | tools 使用真 use case；另以 live 評估 provider 相容與品質 |
 | Web | Vitest 驗 estimator、狀態與可見互動 | 不把整頁 snapshot 或 mock call 次數當唯一驗收 |
-| 保存／完整流程 | Worker 整合測試使用本地 D1 binding；Playwright 同 origin 兩頁與不同 Cookie contexts；另驗部署 D1 | in-memory fake 不能證明 D1 CAS、身份歸屬、跨頁及關頁恢復 |
+| 保存／完整流程 | Vitest 對正式 SQLite store 驗身份與 CAS；Playwright 以真 SQLite、同 origin 兩頁和不同 Cookie contexts 驗端到端，另驗 Oracle 正式入口 | in-memory fake 不能證明 SQLite 持續性、身份歸屬、跨頁及關頁恢復 |
 | 執行與部署 | workerd smoke、實際 Workers SSE、獨立 Python service smoke | Node build 不代表 workerd 通過，本機不代表部署完成 |
 
 預設測試不呼叫外部模型；live 明確 opt-in、限制用量並記模型版本。CI 必要測試未收集、全 skip 或缺瀏覽器都算未通過，不能回報綠燈。具體工具版本與可重跑命令由 T00 鎖定後補入 README。
@@ -54,7 +54,7 @@
 | T11 | T10；部署條件具備 | 實際環境與完整 K3 | 已驗收：Oracle Web／API、D1→SQLite 逐列遷移、正式身份／CAS／Agent、故障／重啟／備份還原及 Worker Free CPU，證據見末段 |
 | T12 | T11 | live K4 與完整 MVP 驗收 | 已驗收：四案例各三次 live、遷移後正式入口 live、A/N/K 對帳、帳戶 Neuron 分析計量與遠端 CI 兩 job |
 
-每項可記「未開始／RED／GREEN／REFACTOR／已驗收／受阻」。只有必要案例與外部條件都有證據才標已驗收；以下內容是測試設計，尚不是執行結果。
+每項可記「未開始／RED／GREEN／REFACTOR／已驗收／受阻」。只有必要案例與外部條件都有證據才標已驗收；下列 T00–T10 增量保留當時的測試設計與 D1 實作歷史，現行保存邊界以上表及末段 Oracle SQLite 驗收為準。
 
 ### T00 — 測試環境與封裝
 
@@ -155,7 +155,7 @@
 
 - RED／GREEN：可自動化的 proxy 路徑、錯誤與 SSE 行為先以整合測試驅動；帳戶開通、套件安裝及部署以 smoke 記錄，不偽稱業務 TDD。
 - 驗收：實際 Worker 入口、Oracle Next.js Web／Python service 及固定上游串流；量測 Worker CPU 與 Oracle 兩服務各自資源、斷線、限流、直接後端繞過是否被擋。跑實際 origin 的 A13／A14，確認 Cookie 屬性、身份隔離、安全快取、SQLite 故障及版本不相容時保留資料；舊 D1 故障已在遷移前另驗。
-- 回復：記錄 Web/API/Worker artifact 組合與契約版本；遷移前已演練 D1 相容 artifact 降版，第一個 SQLite 版本則以線上備份、離線還原容器及同一身份重啟讀回驗證。舊 D1 不作直接降版目標；若必須回切，依部署手冊停寫、全列反向同步與逐列摘要核對。任何破壞性變更須另有資料回復計畫與授權。
+- 回復驗收歷史：遷移前曾演練 D1 相容 artifact 降版；第一個 SQLite 版本曾以線上備份、離線還原容器及同一身份重啟讀回驗證。當時規劃的 D1 反向回切路徑現已關閉；目前只允許先確認 SQLite schema 相容的應用版本回退，操作以部署手冊為準。
 
 ### T12 — 完整驗收與交付
 
@@ -164,9 +164,9 @@
 - 任何關鍵約束失敗回對應增量補 RED／GREEN，再重跑受影響案例；額度不足分日驗證，不自動付費。
 - 補可重跑 README、展示合成標示、已知限制與復現路徑；所有必要證據齊全才宣稱 MVP 完成。此時再做整體規格／架構與實作對照，不能只看單項測試綠燈。
 
-### T11 追加 — Oracle 保存遷移與切換（2026-09-29 決策）
+### T11 追加 — Oracle 保存遷移與切換（2026-09-29 歷史計畫）
 
-Will 已決定把保存 API 與資料一併移到 Oracle，取代正式執行路徑的 D1。現有 49 筆 D1 session（`SELECT COUNT(*)`），其中 26 筆有已採用餐單；`expiresAt > now` 查詢確認 49 筆當下仍有效，revision 範圍 0–3、schemaVersion 均為 1。此數量是切換前盤點，切換時重新計數與對帳。沿用公開 DTO、匿名 Cookie、CSRF、CAS、30 天期限與 Python canonical 驗證；從今日條件重設計的結果是 Web 專用 SQLite volume、TypeScript 保存服務、Worker 固定轉送與限流、Python 私有計算服務。單機低寫入量適合 SQLite；PostgreSQL 能獨立擴容但增加服務與備份維運；受管資料庫減輕維運但不符合此版 Oracle 自有資料落點。舊 D1 schema／資料保留作遷移核對與可回復來源，正式 Worker 不再綁定 D1。
+以下四步是切換前的執行計畫，已完成並留作驗收追溯，**不是現行回切指令**；現行運維見 `deploy/README.md`。Will 當時決定把保存 API 與資料一併移到 Oracle，取代正式執行路徑的 D1。切換前有 49 筆 D1 session（`SELECT COUNT(*)`），其中 26 筆有已採用餐單；`expiresAt > now` 查詢確認 49 筆當下仍有效，revision 範圍 0–3、schemaVersion 均為 1。沿用公開 DTO、匿名 Cookie、CSRF、CAS、30 天期限與 Python canonical 驗證；當時重新設計為 Web 專用 SQLite volume、TypeScript 保存服務、Worker 固定轉送與限流、Python 私有計算服務。單機低寫入量適合 SQLite；PostgreSQL 能獨立擴容但增加服務與備份維運；受管資料庫減輕維運但不符合此版 Oracle 自有資料落點。舊 D1 schema／資料當時保留作遷移核對與可回復來源，正式 Worker 不再綁定 D1。
 
 1. **RED／GREEN：儲存與路由。** 先為 SQLite 真檔案寫同身份隔離、原子 CAS、期限／清除、restart 後讀回與故障不冒稱成功測試；為 Worker→Web 新固定路徑寫 Cookie 只限保存服務、Authorization／任意 header 不轉送、未知 API 拒絕、SSE 取消與 `Set-Cookie` 保留的 RED。GREEN 後完整重跑既有 `sessions.test.ts`、workerd、Playwright、契約與 build。SQLite volume 用獨立 UID／目錄，WAL 和 busy timeout；Web 無模型憑證，Python 無匿名 Cookie。
 2. **資料準備與對帳。** 先在 Oracle 查可用容量、目錄與既有資料；以正式 D1 `--table=plan_sessions` 匯出到受限檔案，在隔離的 SQLite 檔重播並比對列數、schema／revision 分佈及逐列內容摘要。不得在 log、Git 或對話輸出 tokenHash／快照內容；用不可逆摘要做對帳。測錯版與中斷匯入仍保留原 D1 並拒絕啟用候選。
@@ -444,3 +444,9 @@ K4 使用固定 `@cf/zai-org/glm-4.7-flash`、合成食譜 `synthetic:recipes-v1
 - 故障與持續性：正式 Chromium 先建匿名身份，在 Web 容器停機時保存讀取 503 且無清 Cookie，Python runtime 200，容器重啟後同一身份讀取 200（`.artifacts/t11-oracle-storage-outage.log`）；另一次重啟前後 planId／generation／revision 相同，SQLite 全列摘要一致（`t11-oracle-restart-browser.log`）。線上 SQLite backup API 產生 59 列／32 已採用、SHA-256 `b97256163d25d380875b36aebe0030a453048142b71abc41c4c326d20925abab` 的 mode 0600 檔；離主機副本逐列摘要一致，隔離還原容器 health 200／摘要一致。主機 cron inactive，改裝 `meal-prep-sqlite-backup.timer`（每日 03:17 UTC、`Persistent=true`），`systemd-analyze verify` 及手動啟動 service 的 Result=success／ExecMainStatus=0 已驗。API／Web／Tunnel 無 host ports；`docker stats --no-stream` 快照 Web 67.89／API 85.29／Tunnel 18.65 MiB，各在 Compose 限額內。
 - K3 Worker Free CPU：正式 `wrangler tail --env production --format json` 只保留 path／CPU／outcome，四段取樣 `.artifacts/t11-oracle{,2,4,5}-route-metrics.json` 合計 75 事件，最大 CPU 1 ms、0 筆超過[官方 Free 10 ms](https://developers.cloudflare.com/workers/platform/limits/)；其中保存與 Agent 五路徑共 25 筆，/api/session 5、/api/plan 6、/api/plan/actions 8、/api/plan/preview 5、/api/agent 1，全部 outcome ok。其餘有 1 筆取消的首頁請求，未冒稱全部事件都成功。這是實際低流量樣本，不是未來任意流量的保證；相較舊 D1 actions 3–27 ms／preview 7–25 ms，已在相同正式入口解除本次 CPU gate。
 - D1 反向回復工具已做單元與 Wrangler 本地 D1 演練；因正式 SQLite 切換成功，沒有對舊 production D1 執行破壞性的回切。若未來真的回切，依 `deploy/README.md` 先停寫、對 Oracle 做線上備份、產生全列替換 SQL、遠端 D1 重匯出逐列核對，驗過才發布舊 Worker。第一個 SQLite artifact 沒有更舊的同 schema 降版，已以離線還原與同身份重啟驗其現有回復路徑；後續若有第二版再補相容 artifact 降版。
+
+### 後續維運清理（2026-09-29）
+
+- Will 決定不排程同機或離機備份，並關閉 D1 回復窗口。Oracle 的 `meal-prep-sqlite-backup.timer` 已先停用，後卸載 unit；`systemctl show` 為 `LoadState=not-found`、`ActiveState=inactive`、無下次執行時間，`systemctl list-timers --all` 無本專案項目。原有 3 份同機備份、舊 D1 資料庫與受限切換 artifact 保留，不當成持續恢復機制或發行版回切路徑。Web／API 容器維持 healthy。
+- 退役 D1 store、Miniflare probe／依賴、CI 的 D1 專用步驟、反向回寫與備份 CLI／腳本；`session-db.py` 僅保留明確初始化與唯讀 audit。原 `sessions.test.ts` 的 24 個 HTTP 行為案例改在正式 SQLite store 執行，並保留儲存失敗、舊快照、身份與 CAS 斷言；移除的只有 D1 probe／舊 schema 的專用斷言。這是既有行為測試移植與運維清理，沒有新增產品行為，不將其事後測試冒稱首次 RED。
+- 獨立設計審查指出，維運 `audit` 曾沿用切換對帳摘要卻未驗 `PRAGMA user_version`，與正式 Web 啟動檢查不一致。新增不支援版本測試先 RED（`.artifacts/d1-retire-audit-version-red.log`），補版本檢查後 4 個工具測試 GREEN；保留逐列摘要供發布前後稽核。Oracle 上的 CLI 已同步同一 SHA-256，對現有 `deploy/data/plan.sqlite3` 唯讀 audit 通過；遠端 D1 專用原始碼已移除。另把計畫上方 D1 操作語氣改為切換歷史。完整回歸：`uv run --project backend --frozen pytest backend/tests -q` 173 passed、`pnpm test:web` 120 passed、`pnpm test:contracts` 的 wire Python／TS 各 2 passed、`pnpm test:e2e` Node 12 passed、`MEAL_TEST_WORKER=1 pnpm --filter @meal-prep/web exec playwright test --workers=1` 40 passed；`pnpm contracts:check`、typecheck、Ruff check／format、mypy 39 source、Next build、Worker dry-run build 皆通過。原 T11 的備份／還原與 D1 回切演練只代表切換當時的歷史驗收；往後軟體降版須先驗目前 SQLite schema 相容，不能直接發布舊 D1 Worker。

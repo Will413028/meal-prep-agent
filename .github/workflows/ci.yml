@@ -58,7 +58,6 @@ jobs:
       - run: pnpm --filter @meal-prep/web exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - run: python3 scripts/check-test-report.py .artifacts/playwright.xml
-      - run: pnpm --filter @meal-prep/web test:d1
       - run: pnpm --filter @meal-prep/web build:worker
       - run: MEAL_TEST_WORKER=1 pnpm test:e2e
       - run: python3 scripts/check-test-report.py .artifacts/playwright.xml

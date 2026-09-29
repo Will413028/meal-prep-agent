@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import, audit and back up the Oracle session database without printing rows."""
+"""Initialize or audit the Oracle session database without printing rows."""
 
 import argparse
 import hashlib
@@ -32,6 +32,8 @@ def read_only(path: Path) -> sqlite3.Connection:
 
 
 def audit(db: sqlite3.Connection) -> dict[str, object]:
+    if db.execute("PRAGMA user_version").fetchone() != (1,):
+        raise ValueError("Unsupported session database version")
     integrity = db.execute("PRAGMA quick_check").fetchone()
     if integrity != ("ok",):
         raise ValueError("SQLite integrity check failed")
@@ -73,25 +75,6 @@ def create_private(path: Path) -> None:
     os.close(fd)
 
 
-def import_sql(source: Path, destination: Path) -> dict[str, object]:
-    if not source.is_file():
-        raise ValueError("D1 export is missing")
-    create_private(destination)
-    try:
-        db = sqlite3.connect(destination)
-        try:
-            db.executescript(source.read_text(encoding="utf-8"))
-            result = audit(db)
-            db.execute("PRAGMA user_version=1")
-            db.commit()
-        finally:
-            db.close()
-        return result
-    except BaseException:
-        destination.unlink(missing_ok=True)
-        raise
-
-
 def initialize_empty(destination: Path) -> dict[str, object]:
     """Explicitly create a new local development database; runtime never initializes."""
     create_private(destination)
@@ -109,77 +92,19 @@ def initialize_empty(destination: Path) -> dict[str, object]:
         raise
 
 
-def reconcile_d1(source: Path, destination: Path) -> dict[str, object]:
-    """Prepare a private full-row replacement for a paused D1 rollback."""
-    db = read_only(source)
-    try:
-        db.execute("BEGIN")
-        expected = audit(db)
-        create_private(destination)
-        try:
-            with destination.open("w", encoding="utf-8") as output:
-                # D1's import owns its transaction; explicit BEGIN/COMMIT is rejected.
-                output.write("DELETE FROM plan_sessions;\n")
-                for row in db.execute(
-                    f"SELECT {','.join(COLUMNS)} FROM plan_sessions ORDER BY tokenHash"
-                ):
-                    values = ",".join(
-                        db.execute("SELECT quote(?)", (value,)).fetchone()[0]
-                        for value in row
-                    )
-                    output.write(
-                        f"INSERT INTO plan_sessions ({','.join(COLUMNS)}) VALUES ({values});\n"
-                    )
-            return expected
-        except BaseException:
-            destination.unlink(missing_ok=True)
-            raise
-    finally:
-        db.close()
-
-
-def backup(source: Path, destination: Path) -> dict[str, object]:
-    create_private(destination)
-    try:
-        original = read_only(source)
-        copy = sqlite3.connect(destination)
-        try:
-            original.backup(copy)
-            copy.commit()
-            expected = audit(original)
-            actual = audit(copy)
-            if expected != actual:
-                raise ValueError("Backup differs from the source")
-        finally:
-            copy.close()
-            original.close()
-        return actual
-    except BaseException:
-        destination.unlink(missing_ok=True)
-        raise
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for name in ("init", "import", "audit", "backup", "reconcile-d1"):
+    for name in ("init", "audit"):
         command = subparsers.add_parser(name)
         if name == "init":
             command.add_argument("destination", type=Path)
             continue
         command.add_argument("source", type=Path)
-        if name != "audit":
-            command.add_argument("destination", type=Path)
     args = parser.parse_args()
     os.umask(0o077)
     if args.command == "init":
         result = initialize_empty(args.destination)
-    elif args.command == "import":
-        result = import_sql(args.source, args.destination)
-    elif args.command == "backup":
-        result = backup(args.source, args.destination)
-    elif args.command == "reconcile-d1":
-        result = reconcile_d1(args.source, args.destination)
     else:
         with read_only(args.source) as db:
             result = audit(db)
