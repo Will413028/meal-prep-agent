@@ -1,6 +1,6 @@
 # Deployment and rollback
 
-Native Next.js standalone and Python run in separate containers within a dedicated ARM64-compatible Docker Compose project. Cloudflare Workers provides the public entry point, rate limits and fixed upstream proxies; the Oracle Web service owns identity, persistence APIs and a dedicated SQLite volume. The Web, API and named Tunnel share a project-only network and publish no host ports. Two Workers VPC services point only to `api:14318` and `web:14319`; it has no public Tunnel hostname. Deployment acceptance is tracked in `implementation-plan.md`.
+Native Next.js standalone and Python run in separate containers within a dedicated ARM64-compatible Docker Compose project. Cloudflare Workers provides the public entry point, rate limits and fixed upstream proxies; the Oracle Web service owns identity, persistence APIs and a dedicated SQLite volume. The Web, API and named Tunnel share a project-only network and publish no host ports. Two Workers VPC services point only to `api:14318` and `web:14319`; it has no public Tunnel hostname. Deployment acceptance is tracked in `../docs/verification.md`.
 
 ## Configuration
 
@@ -34,7 +34,7 @@ Production Worker has no `MEAL_API_ORIGIN` or `MEAL_WEB_ORIGIN`; requests use pr
 
 ## SQLite operations and rollback
 
-Oracle SQLite is the only live persistence authority. `python3 scripts/session-db.py audit deploy/data/plan.sqlite3` checks the existing file without printing session content. The D1-to-SQLite cutover and its historical backups are recorded in `implementation-plan.md`; the D1 rollback window is closed. The old D1 database and private cutover artifacts have not been deleted, but they are not a release rollback path.
+Oracle SQLite is the only live persistence authority. `python3 scripts/session-db.py audit deploy/data/plan.sqlite3` checks the existing file without printing session content. The D1-to-SQLite cutover and its historical backups are recorded in `../docs/verification.md`; the D1 rollback window is closed. The old D1 database and private cutover artifacts have not been deleted, but they are not a release rollback path.
 
 At Will's 2026-09-29 direction, no local or off-host backup job is scheduled. The former `meal-prep-sqlite-backup.timer` was disabled and removed from Oracle. Existing backup files were left untouched. Do not re-enable a backup job or claim an RPO/RTO without a new decision and a restore drill.
 

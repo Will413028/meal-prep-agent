@@ -1,6 +1,6 @@
 # Meal Prep Agent — 技術選型與架構
 
-更新：2026-09-29。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。雙入口、餐單與正式 Agent 已實作；Oracle Web／API、SQLite 保存及 Cloudflare 入口已部署。D1→SQLite 資料切換與 K3 Free CPU 重驗已完成；K1／K2／K4 與遠端 CI 證據見 [實作計畫](implementation-plan.md)。
+更新：2026-09-29。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。雙入口、餐單與正式 Agent 已實作；Oracle Web／API、SQLite 保存及 Cloudflare 入口已部署。D1→SQLite 資料切換與 K3 Free CPU 重驗已完成；K1／K2／K4 與遠端 CI 證據見 [驗收紀錄](verification.md)。
 
 [產品規格](product-spec.md) 定義 A1–A14；[營養政策](nutrition-policy.md) 定義數值、公式及 N1–N8。本文件是技術選型與模組責任的主要依據。
 
@@ -34,7 +34,7 @@ Web 採原生 Next.js standalone，與 FastAPI／PydanticAI 分別部署到既�
 
 Cloudflare Worker 提供公開入口、限流與固定上游 proxy，不執行 Next.js SSR 或保存 SQL。MEAL_WEB VPC binding 代理 GET／HEAD 頁面及明列的保存 API；保存路徑只轉送該匿名 session Cookie、Origin／CSRF 等必要標頭，回傳 `Set-Cookie`，不轉送 Authorization。MEAL_API VPC binding 代理固定 Python 公開路徑，不接收匿名 Cookie。未知 API 一律拒絕，使用者資料回應不得共享快取。
 
-Oracle 的 Web、API 與具名 Tunnel 使用專案獨立容器／網路，不發布 host port，也不設公開 Tunnel hostname。Web 容器唯一掛載可寫 SQLite 目錄，不持有模型憑證；API 容器不持有匿名 Cookie 或資料庫 volume。Worker 經兩個固定 VPC service 連線；本機測試才使用明確 loopback origin。容量、串流、Worker CPU、SQLite 持久化及私有入口由 T11 在切換後重驗。部署及回復命令見 [deploy/README.md](deploy/README.md)。
+Oracle 的 Web、API 與具名 Tunnel 使用專案獨立容器／網路，不發布 host port，也不設公開 Tunnel hostname。Web 容器唯一掛載可寫 SQLite 目錄，不持有模型憑證；API 容器不持有匿名 Cookie 或資料庫 volume。Worker 經兩個固定 VPC service 連線；本機測試才使用明確 loopback origin。容量、串流、Worker CPU、SQLite 持久化及私有入口由 T11 在切換後重驗。部署及回復命令見 [deploy/README.md](../deploy/README.md)。
 
 免費模型首個候選為 Workers AI `@cf/zai-org/glm-4.7-flash`，依據 [模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。Python 透過 [OpenAI-compatible endpoint](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/) 接入；資格、工具往返及 PydanticAI 相容性仍須實測。憑證只留後端；不因介面相容就宣稱整合完成。
 
@@ -199,7 +199,7 @@ Web／API／契約／政策版本不相容時停止新操作、提示重新載�
 
 ## 9. 整合驗證與完成門檻
 
-以下皆為待驗證條件，不是已完成結果；取代舊 ADK gates。[TDD 計畫](implementation-plan.md) T00–T03 先完成最小技術可行性驗證，完整條件隨功能逐步驗收；不能要求尚未實作的功能先完成產品驗收，也不能把 probe 成功記成完整 gate 通過。
+以下皆為待驗證條件，不是已完成結果；取代舊 ADK gates。[TDD 驗收紀錄](verification.md) T00–T03 先完成最小技術可行性驗證，完整條件隨功能逐步驗收；不能要求尚未實作的功能先完成產品驗收，也不能把 probe 成功記成完整 gate 通過。
 
 | Gate | 通過條件 |
 |---|---|
@@ -214,7 +214,7 @@ Worker CPU 限制適用公開代理；Oracle Web／Python 的時間及記憶體�
 
 ## 10. 實作與驗證順序
 
-具體 RED／GREEN、相依與證據依 [TDD 實作計畫](implementation-plan.md) T00–T12 執行，本節保留概覽。
+具體 RED／GREEN、相依與證據依 [TDD 驗收紀錄](verification.md) T00–T12 執行，本節保留概覽。
 
 沿用產品規格第 11 節相依順序：最小 Web／API／AG-UI 契約 → Python 計算及資料、Web 估算 → 提案與保存 → live 與部署；T11 再將已實作的 D1 保存替換為 Oracle SQLite。先走手動目標、三天提案、採用、局部換菜、清單與重開恢復的切片，再補齊完整 A1–A14，不縮減已確認 MVP。
 

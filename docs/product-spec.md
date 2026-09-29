@@ -1,8 +1,8 @@
 # Meal Prep Agent — MVP 產品規格
 
-更新：2026-09-29。狀態：MVP 已依本規格完成驗收；匿名保存 API／資料已由 D1 遷往 Oracle SQLite，證據見 implementation-plan.md。
+更新：2026-09-29。狀態：MVP 已依本規格完成驗收；匿名保存 API／資料已由 D1 遷往 Oracle SQLite，證據見 verification.md。
 
-本文件定義第一版的使用情境、互動、資料契約與驗收。[營養政策 v1](nutrition-policy.md) 定義公式、產品預設及邊界；[技術架構](architecture.md) 補上模組、提案／SQLite 條件提交及整合 gates。Cloudflare 整合與正式運行證據見 [實作計畫](implementation-plan.md)，不以文件規劃取代實測。
+本文件定義第一版的使用情境、互動、資料契約與驗收。[營養政策 v1](nutrition-policy.md) 定義公式、產品預設及邊界；[技術架構](architecture.md) 補上模組、提案／SQLite 條件提交及整合 gates。Cloudflare 整合與正式運行證據見 [驗收紀錄](verification.md)，不以文件規劃取代實測。
 
 ## 1. 產品定位與已確認方向
 
@@ -147,7 +147,7 @@
 | A13 雲端保存 | 同瀏覽器 Cookie 有效且服務可用時，關頁後恢復已採用計畫與一次復原；不同匿名身份不能讀寫他人計畫；不恢復聊天或問卷，儲存故障不冒稱保存成功 |
 | A14 多分頁與清除 | 同版本的兩次提交只有一次生效；另一頁過期提案被擋；清除或到期後，尚在執行的舊回覆不能恢復已刪計畫 |
 
-驗證分為可重跑的資料／計算測試，以及真實模型的多輪互動驗收。前者通過不能替代後者；各案例的執行證據與尚待項目記於 [實作計畫](implementation-plan.md)。
+驗證分為可重跑的資料／計算測試，以及真實模型的多輪互動驗收。前者通過不能替代後者；各案例的執行證據與尚待項目記於 [驗收紀錄](verification.md)。
 
 ## 10. 設計選擇與開發前驗證
 
@@ -174,7 +174,7 @@ Mifflin–St Jeor 的 [原研究](https://pubmed.ncbi.nlm.nih.gov/2305711/) 保�
 | 模型 | 固定 Workers AI `@cf/zai-org/glm-4.7-flash`，透過 OpenAI-compatible endpoint；正式工具、串流與 canonical 結果已在 T12 live 案例驗證 |
 | 計算與資料 | Python 集中餐單／份量／購物計算；身體問卷在瀏覽器估算，後端接收已確認目標。API 與工具共用 use cases |
 
-依據 [Cloudflare Next.js 指引](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)、[PydanticAI AG-UI 整合](https://pydantic.dev/docs/ai/integrations/ui/ag-ui/)、[模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。實測結果、剩餘 CPU／用量限制見 [實作計畫](implementation-plan.md)，不以官方介面支援代替本產品驗收。
+依據 [Cloudflare Next.js 指引](https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/)、[PydanticAI AG-UI 整合](https://pydantic.dev/docs/ai/integrations/ui/ag-ui/)、[模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。實測結果、剩餘 CPU／用量限制見 [驗收紀錄](verification.md)，不以官方介面支援代替本產品驗收。
 
 免費額度與失敗行為：
 
@@ -207,11 +207,11 @@ Mifflin–St Jeor 的 [原研究](https://pubmed.ncbi.nlm.nih.gov/2305711/) 保�
 
 Agent 每次只接受必要的已確認目標、餐單／條件／待確認提案快照、當次訊息及有長度上限的本分頁對話上下文；不將原始身體表單混入上下文。服務端重新驗證資料與工具參數；PydanticAI run context 限該次 FastAPI 請求，不以服務全域記憶體保存跨使用者對話。應用 log 只記技術狀態與用量，不記訊息或身體欄位。自由聊天會送往模型，介面需與「身體表單只在本機計算」分別說明。
 
-A13／A14 的驗證包含關頁恢復、匿名身份隔離、SQLite 寫入失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；歷史 D1 與遷移後部署證據見 implementation-plan.md T07／T11，K3 已在切換後重驗。
+A13／A14 的驗證包含關頁恢復、匿名身份隔離、SQLite 寫入失敗、多分頁同 revision 提交、復原後舊提案、清除後晚到回覆、30 天到期及未知 schema；歷史 D1 與遷移後部署證據見 verification.md T07／T11，K3 已在切換後重驗。
 
 ## 11. 建議實作順序
 
-以下保留相依概覽；細項遵循 [TDD 實作計畫](implementation-plan.md) 的 RED → GREEN → REFACTOR 及 T00–T12，先跑最小整合再逐步完成完整 gates。
+以下保留相依概覽；細項遵循 [TDD 驗收紀錄](verification.md) 的 RED → GREEN → REFACTOR 及 T00–T12，先跑最小整合再逐步完成完整 gates。
 
 1. 依本規格與營養政策建立 Pydantic／OpenAPI 契約及生成 TS client，先驗證第 10.1 節的免費模型／Cloudflare 組合；讓兩種入口產生同一種已確認目標，建立 N1–N8 及 A1–A4、A8、A12 的合成資料案例。
 2. 建立 Python 餐單計算核心與瀏覽器身體估算：先驗證份量、營養、庫存、鎖定、提案與復原的一致性，覆蓋 A5–A9、A11。

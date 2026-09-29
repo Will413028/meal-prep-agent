@@ -4,7 +4,7 @@
 
 ## 目前狀態
 
-MVP 已按 T00–T12 完成實作與驗收，只用免費模型額度。[產品規格](product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](architecture.md) 定義模組與資料流。Oracle 原生 Web／API、Cloudflare 公開入口與 SQLite 保存已部署；D1 回復窗口已關閉，舊資料保留但不作正式回切。真模型矩陣、正式瀏覽器、Free CPU 取樣及遠端 CI 證據見 [實作計畫](implementation-plan.md)。
+MVP 已按 T00–T12 完成實作與驗收，只用免費模型額度。[產品規格](docs/product-spec.md) 整理互動流程、資料契約、保存方式與驗收案例；[營養政策 v1](docs/nutrition-policy.md) 定義起始估算與數值邊界；[技術架構](docs/architecture.md) 定義模組與資料流。Oracle 原生 Web／API、Cloudflare 公開入口與 SQLite 保存已部署；D1 回復窗口已關閉，舊資料保留但不作正式回切。真模型矩陣、正式瀏覽器、Free CPU 取樣及遠端 CI 證據見 [驗收紀錄](docs/verification.md)。
 
 ## MVP 範圍
 
@@ -13,7 +13,7 @@ MVP 已按 T00–T12 完成實作與驗收，只用免費模型額度。[產品�
 - 局部換菜、調份量、鎖定、變更預覽及復原；營養與清單同步重算。
 - 合併備餐與購物清單，條件無法同時滿足時提供協商選項。
 
-實作依 [TDD 計畫](implementation-plan.md) 的 T00–T12 推進，每個行為先 RED、再 GREEN，必要時 REFACTOR；細項進度與實際測試證據集中記在該計畫。
+MVP 已按 T00–T12 完成 RED → GREEN → REFACTOR；實際測試與部署證據集中於 [驗收紀錄](docs/verification.md)。後續功能仍採相同 TDD 流程。
 
 ## 開發方向
 
@@ -64,7 +64,7 @@ Cloudflare 本機驗證：`pnpm --filter @meal-prep/web build:worker`，接著 `
 PYDANTIC_AI_NO_BANNER=1 uv run --env-file .env.cloudflare.local --project backend --frozen python scripts/live-acceptance.py A1 --trial 12
 ```
 
-腳本只送合成目標、食譜及外食資料，檢查正式工具、來源、canonical 提案或明確不可用原因；原始串流和結構化結果寫入 ignored `.artifacts/t12-live-<案例>-<編號>.events/.json`，其中可能包含完整合成對話，請勿提交。`run_usage` 的 input／output tokens 可依當時[模型費率](https://developers.cloudflare.com/workers-ai/platform/pricing/)估算 Neurons；估值不是 Cloudflare 帳戶實際扣量。A10 預期為設備不足且沒有可採用提案。若觸及每日免費額度，等額度重置後重跑，不自動改用付費服務或展示模式。公開入口與 SQLite 運維見 [部署手冊](deploy/README.md)；逐案證據與已知限制見 [實作計畫](implementation-plan.md)。
+腳本只送合成目標、食譜及外食資料，檢查正式工具、來源、canonical 提案或明確不可用原因；原始串流和結構化結果寫入 ignored `.artifacts/t12-live-<案例>-<編號>.events/.json`，其中可能包含完整合成對話，請勿提交。`run_usage` 的 input／output tokens 可依當時[模型費率](https://developers.cloudflare.com/workers-ai/platform/pricing/)估算 Neurons；估值不是 Cloudflare 帳戶實際扣量。A10 預期為設備不足且沒有可採用提案。若觸及每日免費額度，等額度重置後重跑，不自動改用付費服務或展示模式。公開入口與 SQLite 運維見 [部署手冊](deploy/README.md)；逐案證據與已知限制見 [驗收紀錄](docs/verification.md)。
 
 部署後可用真瀏覽器補驗 live 模式與九餐預覽；只用合成目標，寫入 ignored `.artifacts/t12-live-browser-<編號>.json`，不會採用餐單。編號也須未使用：
 
