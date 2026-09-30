@@ -29,6 +29,8 @@
 - R2 Fixed：fixture 在 Agent admission 前直接搜尋；改為先取 run slot，再以共用 runner 選候選。`test_busy_fixture_does_not_start_candidate_selection` 原 calls=[True] → RED，修正後不呼叫 → GREEN。
 - R3 Fixed：disconnect probe 可吞 CancelledError，monitor 留存使計算 slot 無法釋放；加入明確停止旗標。完整 browser 首次 36 passed／4 failed → focused 4 passed → 完整 40 passed。回歸 test 以 asyncio.wait 觀察自然完成；移除停止旗標的 mutation 1 failed，恢復後 focused 11 passed。這是事後回歸／mutation 證據，不冒充首次 RED。
 
+- R4 Fixed：遠端 CI 兩個 browser workers 共用單一 API，計算重疊時正確回 503；一般功能案例卻假定即時成功，造成 39 passed／1 failed。Playwright 固定 workers: 1，保留零 retries／原成功斷言；容量競爭仍由後端 busy／cancel 回歸驗證。獨立複查無設計回歸；每 worker 獨立服務的平行方案需額外管理程序／port／SQLite，不適合此展示 gate。
+
 ## Gate 命令
 
 從 repo 根目錄執行：

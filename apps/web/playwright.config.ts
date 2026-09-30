@@ -19,6 +19,9 @@ export default defineConfig({
   testIgnore: process.env.MEAL_TEST_WORKER === "1" ? [] : ["**/persistence.spec.ts","**/planner.spec.ts","**/chat-faults.spec.ts"],
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
+  // These functional scenarios share one API with process-local admission.
+  // Intentional admission contention is exercised by backend regression tests.
+  workers: 1,
   reporter: [["list"], ["junit", { outputFile: "../../.artifacts/playwright.xml" }]],
   use: { baseURL: "http://127.0.0.1:14317" },
   webServer: [...(process.env.MEAL_TEST_WORKER === "1" ? [{
