@@ -19,7 +19,7 @@
 - [x] 文件：K4 已完成，明確保留既有展示預算並定義重評條件。
 - [x] 完整回歸：Python 184 passed；Web 121 passed；workerd＋Next standalone browser 40 passed（57.7 秒）；wire Python／TS 各 2 passed；contracts:check、typecheck、mypy（41 source files）、CI 設定下的 ruff check／format 通過。
 - [x] 獨立 design-review、diff／指令檔對帳；累積 findings 全數 Fixed，最終生命週期複查沒有新增設計阻擋。
-- [ ] 提交、正式部署與 smoke。
+- [x] 提交、正式部署與 smoke；b6b6c24 為 runtime artifact，1741433 補測試資源隔離。遠端 [CI 36663037172](https://github.com/Will413028/meal-prep-agent/actions/runs/36663037172) 的 Python／Web job 各自 success。
 
 重跑：`uv run --project backend --frozen pytest backend/tests/test_runtime_hardening.py -q`；`pnpm --filter @meal-prep/web exec vitest run src/server/persistence/diagnostics.test.ts`。
 
@@ -29,7 +29,7 @@
 - R2 Fixed：fixture 在 Agent admission 前直接搜尋；改為先取 run slot，再以共用 runner 選候選。`test_busy_fixture_does_not_start_candidate_selection` 原 calls=[True] → RED，修正後不呼叫 → GREEN。
 - R3 Fixed：disconnect probe 可吞 CancelledError，monitor 留存使計算 slot 無法釋放；加入明確停止旗標。完整 browser 首次 36 passed／4 failed → focused 4 passed → 完整 40 passed。回歸 test 以 asyncio.wait 觀察自然完成；移除停止旗標的 mutation 1 failed，恢復後 focused 11 passed。這是事後回歸／mutation 證據，不冒充首次 RED。
 
-- R4 Fixed：遠端 CI 兩個 browser workers 共用單一 API，計算重疊時正確回 503；一般功能案例卻假定即時成功，造成 39 passed／1 failed。Playwright 固定 workers: 1，保留零 retries／原成功斷言；容量競爭仍由後端 busy／cancel 回歸驗證。獨立複查無設計回歸；每 worker 獨立服務的平行方案需額外管理程序／port／SQLite，不適合此展示 gate。
+- R4 Fixed：遠端 CI 兩個 browser workers 共用單一 API，計算重疊時正確回 503；一般功能案例卻假定即時成功，造成 39 passed／1 failed。Playwright 固定 workers: 1，保留零 retries／原成功斷言；容量競爭仍由後端 busy／cancel 回歸驗證。預設完整本機 40 passed（50.8 秒），修正後遠端 Web job success。獨立複查無設計回歸；每 worker 獨立服務的平行方案需額外管理程序／port／SQLite，不適合此展示 gate。
 
 ## Gate 命令
 
@@ -49,6 +49,14 @@ MEAL_TEST_WORKER=1 pnpm --dir apps/web exec playwright test --workers=1
 
 第一次廣域 ruff 未指定 backend config，誤套預設規則；不據此修改既有 scripts。正式 gate 明確沿用 CI 的 config。中途改動 source／舊服務占埠的中止試跑不列成功 gate；最後完整 browser 使用固定 source、單一序列執行。
 
+## 正式部署證據
+
+- 2026-09-30 由 committed b6b6c24 archive 建置，Oracle Compose up -d --wait 通過。API／Web immutable tag 均 b6b6c24-runtime；API image sha256:9d47f299c9241a02f5992a2a46cd41b2e7b55f0d7914fa1f6505a112d32c4556，Web image sha256:49e1e5269217009b417b21a02528cdcb055c49cc4cd088d8ad39b551abd2ba77。後續 1741433 只改 test config／文件，不需重建 runtime。
+- 正式 HTTPS Chromium：page 200、9 餐手動 preview、採用後重載完整狀態 deep-equal、fixture SSE、另匿名 context 404；成功試跑的兩個合成 session 清除後讀取 404（.artifacts/runtime-deployed-smoke.json）。首版 smoke 對已採用 UI／未建立 session／DELETE status 的假設錯誤，依現行 UI 與 HTTP 契約修正 smoke，未放寬產品；失敗試跑資料仍依既有 TTL 到期。
+- 真免費模型：MEAL_DEPLOYED_ORIGIN 設正式 HTTPS，node scripts/live-browser-acceptance.mjs 5 得 HTTP200／mode live／9 餐 preview／未採用，端到端 22 秒（.artifacts/t12-live-browser-5.json）。API 技術 log 顯示 run_finished activeRuns=0，沒有訊息／問卷／Cookie／提案內容。
+- SQLite sudo 唯讀 audit 通過：70 rows／36 adopted／schemaVersions={1:70}，使用 scripts/session-db.py audit 命令取得；合成驗證造成 rows 增減，不宣稱部署前後摘要相同。主機一般使用者無權直接讀檔的首次 audit 失敗不冒稱資料庫故障。
+- docker stats --no-stream 的一次快照：Web 62.35／API 82.87／Tunnel 20.48 MiB，均在 Compose 限額內；不是容量壓測。Worker source／版本本輪未變更或部署，不重複宣稱新 CPU 樣本。
+
 ## 回退
 
-本輪沒有 SQLite schema、Cookie 或公開 DTO 遷移。保留前一 Web／API image 的 immutable release tag；新版本異常時回退相容同一 SQLite schema 的 image，按 deploy/README.md 重驗 health／讀取／SSE，不重建資料檔、不切回 D1。
+本輪沒有 SQLite schema、Cookie 或公開 DTO 遷移。前版相容 image 為 Web t11-sqlite1／API t12-final2，保留 immutable release tag；新版本異常時回退相容同一 SQLite schema 的 image，按 deploy/README.md 重驗 health／讀取／SSE，不重建資料檔、不切回 D1。
