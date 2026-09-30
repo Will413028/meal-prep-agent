@@ -213,6 +213,9 @@ export async function sessionHttp(request: Request, db: SessionStore, clock: () 
     throw new PersistenceError(404,"not_found");
   } catch (error) {
     if (error instanceof RequestTooLarge) return response({error:"request_too_large"},413);
+    const status=error instanceof PersistenceError ? error.status : 503;
+    if (status >= 500) console.warn(JSON.stringify({event:"persistence_error",status,
+      code:error instanceof PersistenceError && ["calculation_unavailable","model_unavailable","invalid_calculation_response"].includes(error.code) ? error.code : "storage_unavailable"}));
     return error instanceof PersistenceError ? response({error:error.code},error.status) : response({error:"storage_unavailable"},503);
   }
 }

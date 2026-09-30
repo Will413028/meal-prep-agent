@@ -1,6 +1,6 @@
 # Meal Prep Agent — 技術選型與架構
 
-更新：2026-09-29。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。雙入口、餐單與正式 Agent 已實作；Oracle Web／API、SQLite 保存及 Cloudflare 入口已部署。D1→SQLite 資料切換與 K3 Free CPU 重驗已完成；K1／K2／K4 與遠端 CI 證據見 [驗收紀錄](verification.md)。
+更新：2026-09-30。採用 Next.js＋TypeScript、FastAPI＋PydanticAI、AG-UI，單一 repo、後端 Modular Monolith。雙入口、餐單與正式 Agent 已實作；Oracle Web／API、SQLite 保存及 Cloudflare 入口已部署。D1→SQLite 資料切換與 K3 Free CPU 重驗已完成；K1／K2／K4 與遠端 CI 證據見 [驗收紀錄](verification.md)。
 
 [產品規格](product-spec.md) 定義 A1–A14；[營養政策](nutrition-policy.md) 定義數值、公式及 N1–N8。本文件是技術選型與模組責任的主要依據。
 
@@ -22,7 +22,7 @@
 
 | 層 | 選型與責任 |
 |---|---|
-| Web | Next.js App Router＋TypeScript；route 薄層、功能置於 features；本機計畫由 Client Components 存取 |
+| Web | Next.js App Router＋TypeScript；route 薄層、功能置於 features；瀏覽器記憶體鏡像由 Client Components 存取 |
 | API | FastAPI＋Pydantic；HTTP 與 Agent tools 呼叫同一組 Python application use cases |
 | Agent | PydanticAI 管理模型／工具迴圈；官方 AGUIAdapter 輸出 AG-UI，Web 使用 HttpAgent |
 | 契約 | Pydantic／OpenAPI 為 API schema 來源，openapi-typescript／openapi-fetch 產生 TS client；生成型別不取代執行時驗證 |
@@ -36,7 +36,7 @@ Cloudflare Worker 提供公開入口、限流與固定上游 proxy，不執行 N
 
 Oracle 的 Web、API 與具名 Tunnel 使用專案獨立容器／網路，不發布 host port，也不設公開 Tunnel hostname。Web 容器唯一掛載可寫 SQLite 目錄，不持有模型憑證；API 容器不持有匿名 Cookie 或資料庫 volume。Worker 經兩個固定 VPC service 連線；本機測試才使用明確 loopback origin。容量、串流、Worker CPU、SQLite 持久化及私有入口由 T11 在切換後重驗。部署及回復命令見 [deploy/README.md](../deploy/README.md)。
 
-免費模型首個候選為 Workers AI `@cf/zai-org/glm-4.7-flash`，依據 [模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。Python 透過 [OpenAI-compatible endpoint](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/) 接入；資格、工具往返及 PydanticAI 相容性仍須實測。憑證只留後端；不因介面相容就宣稱整合完成。
+免費模型首個候選為 Workers AI `@cf/zai-org/glm-4.7-flash`，依據 [模型卡](https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/) 與 [免費模型資格公告](https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/)。Python 透過 [OpenAI-compatible endpoint](https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility/) 接入；資格、工具往返及 PydanticAI 相容性已有驗收，證據見 verification.md；版本或供應商條件變更時重驗。憑證只留後端；不因介面相容就宣稱整合完成。
 
 ## 3. 資料流與權威狀態
 
@@ -132,9 +132,11 @@ DRI 係數及 golden fixtures 以版本化政策資料維護，Web 由該資料�
 
 ### 5.3 配餐與衍生資料
 
+Agent tool、HTTP preview 與 fixture 候選選擇共用 async calculation runner，以 asyncio.to_thread 執行同步搜尋；每 process 同時最多一個計算、零排隊，額滿回 calculation_unavailable。搜尋在擴展與 canonical 驗證前檢查取消訊號，取消時等待計算 thread 退出再釋放容量。disconnect monitor 另有明確停止旗標，避免取消被 probe 吞掉後持續占用容量。這是 event-loop 隔離，並非增加 CPU 平行算力；evaluate／validate 的普通 FastAPI def route 仍使用 framework threadpool。
+
 受控食譜候選 → 份量搜尋 → 每日營養與硬限制驗證 → 庫存／購物／備餐 → 完整差異。模型只能選擇資料及解釋，不計算或補造未知營養。
 
-先採有限搜尋，起始上限為 beam 16、每餐 4 候選、3 輪，待量測調整；搜尋未找到不等於證明無解或全域最優。鎖定與 scope 外內容必須精確保留；固定外食不加入自煮購物清單，未知營養維持 null 並標示完整性。料理合併須保留食材／步驟依賴，同一設備先序列安排；被替換內容的勾選失效，未受影響內容保留。
+先採有限搜尋，起始上限為 beam 16、每餐 4 候選、3 輪，維持本版驗收值；受控食譜規模改變或搜尋耗時增加時重評；搜尋未找到不等於證明無解或全域最優。鎖定與 scope 外內容必須精確保留；固定外食不加入自煮購物清單，未知營養維持 null 並標示完整性。料理合併須保留食材／步驟依賴，同一設備先序列安排；被替換內容的勾選失效，未受影響內容保留。
 
 ## 6. API 與 Agent 執行
 
@@ -191,15 +193,15 @@ Worker 公開入口只轉送明列路徑：`POST /api/session` 建立匿名身�
 
 預設 fixture、明確切換 live，不以預錄結果冒充模型成功。免費資格、每日 Neurons、耗盡行為以產品規格第 10.1 節為準，沒有付費 fallback。
 
-初始限制：每分頁一個 active run、request 128 KiB、單訊息 2,000 字、上下文最多 8 則／8,000 字、每輪最多 4 次模型呼叫／8 次工具／60 秒、單次輸出最多 2,048 tokens，整輪依 provider 回報用量限制輸入 120,000／輸出 8,192 tokens。token 用量 gate 在回報後判定，不能宣稱超界請求未送出或未消耗額度。這些是待 K4 調整的應用預算，不能當成帳戶費用硬上限。
+本版已驗收的應用預算：每分頁一個 active run、request 128 KiB、單訊息 2,000 字、上下文最多 8 則／8,000 字、每輪最多 4 次模型呼叫／8 次工具／60 秒、單次輸出最多 2,048 tokens，整輪依 provider 回報用量限制輸入 120,000／輸出 8,192 tokens。token 用量 gate 在回報後判定，不能宣稱超界請求未送出或未消耗額度。K4 後維持這些展示預算；模型、上下文或工具變更時重評，不能當成帳戶費用硬上限。
 
-公開入口採 Cloudflare Rate Limiting bindings：一般 API 每來源 300/min、建立 session 每來源 60/min、AI 每匿名識別 6/min，識別雜湊後作 key；目前為待 K4 核對的展示初值。原生計數按 Cloudflare location 且為 eventually consistent，不作全域費用記帳。binding 缺失／故障拒絕 API；provider 429 另觸發 Python process 級 60 秒暫停，不自動重試。Python 同時限制 body、執行次數與時間；隔離直接後端入口以免繞過 proxy。多 process semaphore 不是全域額度，須核對帳戶共用量。記錄技術狀態、延遲及用量，不記問卷、訊息或完整提案；tracing 也須檢查內容擷取設定。
+公開入口採 Cloudflare Rate Limiting bindings：一般 API 每來源 300/min、建立 session 每來源 60/min、AI 每匿名識別 6/min，識別雜湊後作 key；K4 後保留上述展示值；流量、429 比例或模型成本改變時重評。原生計數按 Cloudflare location 且為 eventually consistent，不作全域費用記帳。binding 缺失／故障拒絕 API；provider 429 另觸發 Python process 級 60 秒暫停，不自動重試。Python 同時限制 body、執行次數與時間；隔離直接後端入口以免繞過 proxy。Python 每個 app／process 共用一個 active Agent run 容量，涵蓋 fixture 與 live，沒有等待佇列；額滿回 503 model_busy、Retry-After: 1，不呼叫模型也不自動重試。串流完成、timeout、取消及早期 ASGI 斷線皆釋放容量。此值是單主機展示的保守設定，不是容量量測結論；若需增加，同時量測模型併行、event-loop 延遲及容器資源。多 process 不共享此容量，增加 process 前必須重新設計 admission，不能當成全域帳戶額度。Python 輸出 JSON 技術事件：run 開始／完成／拒絕／錯誤、active runs、run／計算耗時、examined；Web 記保存／開庫／清理故障的固定分類。既有 run_usage 仍由 AG-UI 回傳。事件不記 Cookie、問卷、訊息、提案或 exception message；容器日誌沿用輪替設定。tracing 也須檢查內容擷取設定。
 
 Web／API／契約／政策版本不相容時停止新操作、提示重新載入並保留原資料。第一版不加入 Service Worker 或離線配餐引擎。
 
 ## 9. 整合驗證與完成門檻
 
-以下皆為待驗證條件，不是已完成結果；取代舊 ADK gates。[TDD 驗收紀錄](verification.md) T00–T03 先完成最小技術可行性驗證，完整條件隨功能逐步驗收；不能要求尚未實作的功能先完成產品驗收，也不能把 probe 成功記成完整 gate 通過。
+以下定義驗收條件；MVP 已完成的結果見 verification.md，新改動仍須重跑受影響 gate。[TDD 驗收紀錄](verification.md) T00–T03 先完成最小技術可行性驗證，完整條件隨功能逐步驗收；不能要求尚未實作的功能先完成產品驗收，也不能把 probe 成功記成完整 gate 通過。
 
 | Gate | 通過條件 |
 |---|---|
@@ -218,6 +220,6 @@ Worker CPU 限制適用公開代理；Oracle Web／Python 的時間及記憶體�
 
 沿用產品規格第 11 節相依順序：最小 Web／API／AG-UI 契約 → Python 計算及資料、Web 估算 → 提案與保存 → live 與部署；T11 再將已實作的 D1 保存替換為 Oracle SQLite。先走手動目標、三天提案、採用、局部換菜、清單與重開恢復的切片，再補齊完整 A1–A14，不縮減已確認 MVP。
 
-pytest 驗證 Python 業務規則與資料遷移；Vitest 驗證 Web estimator／state／SQLite CAS；Playwright 驗證兩入口、串流、跨分頁、匿名身份及保存失敗。合成案例可重跑與真模型驗收分開記錄；命令見 README，真實 RED／GREEN 與尚缺的 gate 見 implementation-plan。
+pytest 驗證 Python 業務規則與資料遷移；Vitest 驗證 Web estimator／state／SQLite CAS；Playwright 驗證兩入口、串流、跨分頁、匿名身份及保存失敗。合成案例可重跑與真模型驗收分開記錄；命令見 README，真實 RED／GREEN 與 gate 證據見 verification.md。
 
 若未來需要長時間接續任務或跨裝置資料，再分別評估 Temporal 與帳號／PostgreSQL，重新定義資料權威及恢復契約；本次不預建這些能力。

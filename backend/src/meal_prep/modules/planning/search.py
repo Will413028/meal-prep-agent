@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal, localcontext
 
@@ -20,8 +21,20 @@ from .contracts import (
 )
 
 
-def build_proposal(request: BuildProposalRequest) -> BuildProposalResult:
+class SearchCancelled(Exception):
+    pass
+
+
+def build_proposal(
+    request: BuildProposalRequest, *, should_stop: Callable[[], bool] | None = None
+) -> BuildProposalResult:
     examined = 0
+
+    def checkpoint() -> None:
+        if should_stop is not None and should_stop():
+            raise SearchCancelled()
+
+    checkpoint()
 
     def failure(reason: str) -> BuildProposalResult:
         return BuildProposalResult(
@@ -93,6 +106,7 @@ def build_proposal(request: BuildProposalRequest) -> BuildProposalResult:
         decimal_context.prec = 32
         decimal_context.rounding = ROUND_HALF_UP
         for day in dates:
+            checkpoint()
             preserved = tuple(
                 meal
                 for key, meal in seeds.items()
@@ -154,6 +168,7 @@ def build_proposal(request: BuildProposalRequest) -> BuildProposalResult:
                     allowed = (allowed[offset:] + allowed[:offset])[:4]
                     options = []
                     for recipe in allowed:
+                        checkpoint()
                         quantity = recipe.portionMinimum
                         while quantity <= recipe.portionMaximum:
                             try:
@@ -176,6 +191,7 @@ def build_proposal(request: BuildProposalRequest) -> BuildProposalResult:
                     ranked = []
                     for partial in beam:
                         for option in options:
+                            checkpoint()
                             if examined >= request.searchBudget:
                                 return failure("search_budget_exhausted")
                             examined += 1
@@ -230,6 +246,7 @@ def build_proposal(request: BuildProposalRequest) -> BuildProposalResult:
                 return failure("not_found_within_search_limits")
             completed.extend(winner)
     try:
+        checkpoint()
         proposal = validate_proposal(
             ValidateProposalRequest(
                 context=request.context,

@@ -14,9 +14,12 @@ from pydantic_ai import AgentRunResult
 from pydantic_ai.messages import ToolCallPart
 from pydantic_ai.usage import UsageLimits
 
+from meal_prep.platform.runtime import ManagedStream, diagnostic
 from meal_prep.platform.sse import with_heartbeat
 
 from ..contracts import BuildProposalRequest
+from ..execution import CalculationBusy
+from ..search import SearchCancelled
 from .fixture import fixture_choice, fixture_model
 from .runtime import PlanningRun, planning_agent
 from .transport import PlanningAdapter
@@ -76,10 +79,9 @@ async def run(request: Request) -> Response:
     except (ValueError, TypeError, AttributeError, ValidationError):
         return JSONResponse({"error": "invalid_agent_request"}, status_code=422)
     mode = incoming.forwarded_props.get("mode", "fixture")
-    fixture = fixture_choice(planning) if mode == "fixture" else None
     model = (
-        fixture_model(fixture.replacement)
-        if fixture is not None
+        fixture_model({})
+        if mode == "fixture"
         else getattr(request.app.state, "planning_model", None)
     )
     if model is None:
@@ -94,11 +96,45 @@ async def run(request: Request) -> Response:
                 "cache-control": "no-store",
             },
         )
-    deps = PlanningRun(
-        planning,
-        fixture_unavailable_reason=fixture.unavailable_reason if fixture else None,
-    )
-    adapter = PlanningAdapter(agent=planning_agent(model), run_input=incoming)
+    lease = request.app.state.run_capacity.acquire()
+    if lease is None:
+        return JSONResponse(
+            {"error": "model_busy"},
+            status_code=503,
+            headers={"retry-after": "1", "cache-control": "no-store"},
+        )
+
+    admitted = monotonic()
+    try:
+        async with asyncio.timeout(RUN_TIMEOUT_SECONDS):
+            fixture = (
+                await fixture_choice(
+                    planning,
+                    request.app.state.calculation_capacity,
+                    request.is_disconnected,
+                )
+                if mode == "fixture"
+                else None
+            )
+        if fixture is not None:
+            model = fixture_model(fixture.replacement)
+        deps = PlanningRun(
+            planning,
+            calculation_capacity=request.app.state.calculation_capacity,
+            fixture_unavailable_reason=fixture.unavailable_reason if fixture else None,
+        )
+        adapter = PlanningAdapter(agent=planning_agent(model), run_input=incoming)
+    except (CalculationBusy, SearchCancelled, TimeoutError):
+        lease.release()
+        diagnostic("run_error", code="calculation_unavailable")
+        return JSONResponse(
+            {"error": "calculation_unavailable"},
+            status_code=503,
+            headers={"cache-control": "no-store"},
+        )
+    except BaseException:
+        lease.release()
+        raise
 
     async def complete(result: AgentRunResult[Any]) -> AsyncIterator[CustomEvent]:
         usage = result.usage
@@ -172,8 +208,12 @@ async def run(request: Request) -> Response:
             )
 
     async def bounded_run() -> AsyncGenerator[BaseEvent]:
+        started = admitted
+        diagnostic("run_started", activeRuns=lease.capacity.active)
         try:
-            async with asyncio.timeout(RUN_TIMEOUT_SECONDS):
+            async with asyncio.timeout(
+                max(0, RUN_TIMEOUT_SECONDS - (monotonic() - admitted))
+            ):
                 async for event in adapter.run_stream(
                     deps=deps,
                     on_complete=complete,
@@ -191,11 +231,28 @@ async def run(request: Request) -> Response:
                         and event.code == "model_quota"
                     ):
                         request.app.state.model_retry_at = monotonic() + 60
+                    if isinstance(event, RunErrorEvent):
+                        diagnostic(
+                            "run_error",
+                            code=event.code
+                            if event.code
+                            in {"model_quota", "model_unavailable", "run_limit"}
+                            else "model_unavailable",
+                        )
                     yield event
         except TimeoutError:
+            diagnostic("run_error", code="run_timeout")
             yield RunErrorEvent(message="run_timeout", code="run_timeout")
+        finally:
+            lease.release()
+            diagnostic(
+                "run_finished",
+                elapsedMs=round((monotonic() - started) * 1000, 3),
+                activeRuns=lease.capacity.active,
+            )
 
     events = bounded_run()
-    return with_heartbeat(
-        adapter.streaming_response(events), close_source=events.aclose
+    return ManagedStream(
+        with_heartbeat(adapter.streaming_response(events), close_source=events.aclose),
+        lease,
     )

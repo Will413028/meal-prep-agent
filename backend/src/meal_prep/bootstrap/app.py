@@ -7,10 +7,13 @@ from meal_prep.modules.planning.agents.api import router as agent_router
 from meal_prep.modules.planning.api import router as planning_router
 from meal_prep.modules.recipes.api import router as recipes_router
 from meal_prep.platform.request_limits import RequestSizeLimit
+from meal_prep.platform.runtime import RunCapacity
 
 
 def create_app(*, include_agent: bool = True) -> FastAPI:
     app = FastAPI(title="Meal Prep API")
+    app.state.run_capacity = RunCapacity()
+    app.state.calculation_capacity = RunCapacity(kind="calculation")
     app.add_middleware(RequestSizeLimit)
 
     @app.exception_handler(RequestValidationError)

@@ -9,7 +9,7 @@ function database(): SQLiteSessionStore {
   const path=process.env.MEAL_DB_PATH;
   if (!path?.startsWith("/")) throw new Error("MEAL_DB_PATH must be absolute");
   store=new SQLiteSessionStore(path);
-  const sweep=setInterval(()=>{void store?.purge(Date.now()).catch(()=>{ /* Reads still reject expired rows. */ });},24*60*60*1000);
+  const sweep=setInterval(()=>{void store?.purge(Date.now()).catch(()=>{console.warn(JSON.stringify({event:"storage_cleanup_failed"}));});},24*60*60*1000);
   sweep.unref();
   return store;
 }
@@ -20,7 +20,7 @@ export async function handlePersistence(request: Request): Promise<Response> {
   try {
     const origin=process.env.MEAL_API_ORIGIN;
     return await sessionHttp(request,database(),Date.now,pythonValidator(origin),pythonBuilder(origin),pythonAgent(origin),publicOrigin);
-  } catch {return unavailable();}
+  } catch {console.warn(JSON.stringify({event:"storage_open_failed"}));return unavailable();}
 }
 
 export function storageHealth(): Response {

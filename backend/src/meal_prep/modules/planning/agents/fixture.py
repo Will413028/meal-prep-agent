@@ -1,7 +1,7 @@
 """Explicit synthetic demonstration model; never selected as an error fallback."""
 
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -9,10 +9,11 @@ from pydantic_ai.messages import ToolReturnPart
 from pydantic_ai.models.function import DeltaToolCall, FunctionModel
 
 from meal_prep.modules.recipes.catalog import load_catalog
+from meal_prep.platform.runtime import RunCapacity
 
 from ..application import recipe_allowed
 from ..contracts import BuildProposalRequest, MealKey
-from ..search import build_proposal
+from ..execution import calculate
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,11 @@ class FixtureChoice:
     ) = None
 
 
-def fixture_choice(request: BuildProposalRequest) -> FixtureChoice:
+async def fixture_choice(
+    request: BuildProposalRequest,
+    capacity: RunCapacity,
+    disconnected: Callable[[], Awaitable[bool]],
+) -> FixtureChoice:
     if request.base is None or request.replacements:
         return FixtureChoice({})
     scope = {(meal.day, meal.slot) for meal in request.context.scope}
@@ -50,7 +55,7 @@ def fixture_choice(request: BuildProposalRequest) -> FixtureChoice:
                 },
                 deep=True,
             )
-            result = build_proposal(candidate)
+            result = await calculate(candidate, capacity, disconnected)
             if (
                 result.status == "ready"
                 and result.proposal

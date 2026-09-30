@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import Field
@@ -6,6 +6,7 @@ from pydantic_ai import Agent, ModelRetry, RunContext
 from pydantic_ai.models import Model
 
 from meal_prep.modules.recipes.catalog import load_catalog
+from meal_prep.platform.runtime import RunCapacity
 
 from ..application import recipe_allowed
 from ..contracts import (
@@ -13,7 +14,7 @@ from ..contracts import (
     BuildProposalResult,
     MealKey,
 )
-from ..search import build_proposal as calculate_proposal
+from ..execution import calculate
 
 ClarificationReason = Literal["meal", "recipe", "conditions"]
 
@@ -21,6 +22,9 @@ ClarificationReason = Literal["meal", "recipe", "conditions"]
 @dataclass
 class PlanningRun:
     request: BuildProposalRequest
+    calculation_capacity: RunCapacity = field(
+        default_factory=lambda: RunCapacity(kind="calculation")
+    )
     result: BuildProposalResult | None = None
     completed_tool_call: str | None = None
     clarification: ClarificationReason | None = None
@@ -146,7 +150,7 @@ def planning_agent(model: Model) -> Agent[PlanningRun, str]:
                 },
                 deep=True,
             )
-        result = calculate_proposal(request)
+        result = await calculate(request, ctx.deps.calculation_capacity)
         ctx.deps.result = result
         ctx.deps.completed_tool_call = ctx.tool_call_id
         return {"status": result.status, "reason": result.reason}

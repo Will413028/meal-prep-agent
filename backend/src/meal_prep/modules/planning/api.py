@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from meal_prep.platform.decimal_json import DecimalJSONRoute
 
@@ -11,7 +11,8 @@ from .contracts import (
     Evaluation,
     ValidateProposalRequest,
 )
-from .search import build_proposal
+from .execution import CalculationBusy, calculate
+from .search import SearchCancelled
 
 router = APIRouter(prefix="/api/v1", tags=["planning"], route_class=DecimalJSONRoute)
 
@@ -38,5 +39,12 @@ def validate(request: ValidateProposalRequest) -> CanonicalProposal:
 
 
 @router.post("/proposals/build", response_model=BuildProposalResult)
-def build(request: BuildProposalRequest) -> BuildProposalResult:
-    return build_proposal(request)
+async def build(request: BuildProposalRequest, http: Request) -> BuildProposalResult:
+    try:
+        return await calculate(
+            request, http.app.state.calculation_capacity, http.is_disconnected
+        )
+    except (CalculationBusy, SearchCancelled) as error:
+        raise HTTPException(
+            status_code=503, detail={"code": "calculation_unavailable"}
+        ) from error
